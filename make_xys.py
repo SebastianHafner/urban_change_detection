@@ -78,14 +78,14 @@ if __name__ == '__main__':
     train_areas = ['abudhabi', 'beihai', 'aguasclaras', 'beirut', 'bercy', 'bordeaux', 'cupertino',
                    'hongkong', 'mumbai', 'nantes', 'rennes', 'saclay_e', 'pisa', 'rennes']
 
-    FOLDER = Path('C:/Users/hafne/urban_change_detection/data/Onera/labels/')
+    FOLDER = Path('C:/Users/hafne/urban_change_detection/data/Onera/')
 
     step = 6
     patch_s = 32
 
     cities = []
     for i_city in train_areas:
-        file = FOLDER / i_city / 'cm' / f'{i_city}-cm.tif'
+        file = FOLDER / 'labels' / i_city / 'cm' / f'{i_city}-cm.tif'
         print('icity', i_city)
         train_gt = io.imread(file)
         xy_city = sliding_window_train(i_city, train_areas, train_gt, patch_s, step)
@@ -105,7 +105,7 @@ if __name__ == '__main__':
                        'image_ID': list(final_cities_train[:, 2]),
                        'transform_ID': list(final_cities_train[:, 3]),
                        })
-    train_file = FOLDER.parent / 'myxys_train.csv'
+    train_file = FOLDER / 'myxys_train.csv'
     df.to_csv(str(train_file), index=False, columns=["X", "Y", "image_ID", "transform_ID"])
 
     # save val to csv file
@@ -114,5 +114,5 @@ if __name__ == '__main__':
                        'image_ID': list(final_cities_val[:, 2]),
                        'transform_ID': list(final_cities_val[:, 3]),
                        })
-    val_file = FOLDER.parent / 'myxys_val.csv'
+    val_file = FOLDER / 'myxys_val.csv'
     df.to_csv(str(val_file), index=False, columns=["X", "Y", "image_ID", "transform_ID"])

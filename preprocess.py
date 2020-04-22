@@ -59,7 +59,10 @@ def histogram_match(source, reference, match_proportion=1.0):
 
 
 if __name__ == '__main__':
-    IMG_FOLDER = Path('C:/Users/hafne/urban_change_detection/data/Onera/images/')
+
+    FOLDER = Path('C:/Users/hafne/urban_change_detection/data/Onera/')
+
+    IMG_FOLDER = FOLDER / 'images'
     # folder of the form ./IMGS_PREPROCESSED/abudhabi/imgs_1/..(13 tif 2D images of sentinel channels)..
     # ./IMGS_PREPROCESSED/abudhabi/imgs_2/..(13 tif 2D images of sentinel channels)..
     # ....
@@ -75,7 +78,7 @@ if __name__ == '__main__':
                  'cupertino', 'dubai', 'hongkong', 'lasvegas', 'milano', 'montpellier', 'mumbai', 'nantes',
                  'norcia', 'paris', 'pisa', 'rennes', 'rio', 'saclay_e', 'saclay_w', 'valencia']
 
-    DESTINATION_FOLDER = Path('C:/Users/hafne/urban_change_detection/data/Onera/images_preprocessed/')
+    DESTINATION_FOLDER = FOLDER / 'images_preprocessed'
     if not DESTINATION_FOLDER.exists():
         DESTINATION_FOLDER.mkdir()
 
