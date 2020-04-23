@@ -9,7 +9,7 @@ import torch
 class MyDataset(Dataset):
     def __init__(self, csv_path, image_ids, image_folder, label_folder, nb_dates, patch_size):
         # Read the csv file
-        self.data_info = pd.read_csv(csv_path)
+        self.data_info = pd.read_csv(str(csv_path))
 
         self.patch_size = patch_size
         self.nb_dates = nb_dates
@@ -17,25 +17,27 @@ class MyDataset(Dataset):
         self.all_imgs = []
         for nd in self.nb_dates:
             imgs_i = []
-            for id in image_ids:
-                imgs_i.append(np.load(image_folder + id + '/' + id + '_{}.npy'.format(str(nd))))            
+            for city in image_ids:
+                image_file = image_folder / city / f'{city}_{nd}.npy'
+                imgs_i.append(np.load(image_file))
             self.all_imgs.append(imgs_i)
 
         self.all_labels = []
-        for id in image_ids:
-            label = io.imread(label_folder + id + '/cm/' + id + '-cm.tif')
-            label[label==1]=0
-            label[label==2]=1
+        for city in image_ids:
+            label_file = label_folder / city / 'cm' / f'{city}-cm.tif'
+            label = io.imread(label_file)
+            label[label == 1] = 0
+            label[label == 2] = 1
             self.all_labels.append(label)
 
         # Calculate len
-        self.data_len = self.data_info.shape[0]-1
+        self.data_len = self.data_info.shape[0] - 1
 
     def __getitem__(self, index):
-        x = int(self.data_info.iloc[:,0][index])
-        y = int(self.data_info.iloc[:,1][index])
-        image_id = int(self.data_info.iloc[:,2][index])
-        transformation_id = int(self.data_info.iloc[:,3][index])
+        x = int(self.data_info.iloc[:, 0][index])
+        y = int(self.data_info.iloc[:, 1][index])
+        image_id = int(self.data_info.iloc[:, 2][index])
+        transformation_id = int(self.data_info.iloc[:, 3][index])
 
         def transform_date(patch, tr_id):
             if tr_id == 0:

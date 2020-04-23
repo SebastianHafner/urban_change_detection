@@ -12,7 +12,7 @@ from skimage import io
 import cv2
 
 USE_CUDA = torch.cuda.is_available()
-DEVICE = 2
+DEVICE = 0
 def to_cuda(v):
     if USE_CUDA:
         return v.cuda(DEVICE)
