@@ -1,38 +1,35 @@
-GEE_USERNAME: 'hafnersailing'
+SEED: 7
 
-PIXEL_SPACING: 10
-CRS: 'UTM'
-ERROR_MARGIN: 0.01
-PATH: 'C:/Users/hafne/urban_extraction/data/samples/'
+MODEL:
+  TYPE: 'unet' # should support unet, unet_lstm, siammese_conc, siamese_diff,
+  BINARY_CLASSIFICATION: True
+  OUT_CHANNELS: 1
+  IN_CHANNELS: 2
+  LOSS_TYPE: 'FrankensteinLoss'
 
-SATELLITE_DATA:
-  DATE_RANGE: ['2018-06-01', '2018-09-01']
-  RECORDS:
-    - SENSOR: 's2toa'
-      BANDS: 'tm'
-      PRODUCT: 'cloud_free_mosaic'
-      NORMALIZE: True
+DATALOADER:
+  NUM_WORKER: 8
+  SHUFFLE: True
+  SENTINEL1:
+    BANDS: ['VV', 'VH']
+    TEMPORAL_MODE: 'bi-temporal'
+  SENTINEL2:
+    BANDS: ['B2', 'B3', 'B4', 'B8', 'B11', 'B12']
+    TEMPORAL_MODE: 'bi-temporal'
 
-BUILDING_FOOTPRINTS:
-  PIXEL_PERCENTAGE: True
-  ASSETS: []
+DATASETS:
+  TRAIN: '/storage/shafner/urban_change_detection/Onera/'
+  TEST: '/storage/shafner/urban_change_detection/Onera/'
 
-ROI:
-  ID: 'city_name'
-  UTM_EPSG: ''
-  LNG_RANGE: [0, 0]
-  LAT_RANGE: [0, 0]
+OUTPUT_BASE_DIR: '/storage/shafner/urban_change_detection/run_logs/'
 
-SAMPLING:
-  PATCH_SIZE: 256
-  SAMPLE_FRACTION: 0.3
-  MAX_SAMPLE_SIZE: 800
-  NEIGHBORHOOD_SIZE: 50
-  SEED: 7
+TRAINER:
+  LR: 1e-4
+  BATCH_SIZE: 16
+  EPOCHS: 50
 
-DOWNLOAD:
-  TYPE: '' # drive or cloud
-  BUCKET_NAME: 'urban_extraction_buildings'
-  DRIVE_FOLDER: 'folder_name'
-  TABLE_FORMAT: 'GeoJSON'
-  IMAGE_FORMAT: 'GeoTIFF'
+AUGMENTATION:
+  CROP_TYPE: 'none' # importance or none
+  CROP_SIZE: 1024
+  RANDOM_FLIP: True
+  RANDOM_ROTATE: True
