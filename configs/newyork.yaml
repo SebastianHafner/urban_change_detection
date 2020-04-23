@@ -1,0 +1,11 @@
+_BASE_: "base.yaml"
+
+BUILDING_FOOTPRINTS:
+  PIXEL_PERCENTAGE: True
+  ASSETS: ['Bing/UnitedStates/NewYork', 'Bing/UnitedStates/NewJersey', 'Bing/UnitedStates/Connecticut']
+
+ROI:
+  ID: 'newyork'
+  UTM_EPSG: 'EPSG:32618'
+  LNG_RANGE: [-74.65882292537351, -73.23884001521726]
+  LAT_RANGE: [40.30097458898333, 41.28036175529884]

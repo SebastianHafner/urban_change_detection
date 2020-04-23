@@ -1,0 +1,11 @@
+_BASE_: "base.yaml"
+
+BUILDING_FOOTPRINTS:
+  PIXEL_PERCENTAGE: True
+  ASSETS: ['Bing/Canada/BritishColumbia', 'Bing/UnitedStates/Washington']
+
+ROI:
+  ID: 'vancouver'
+  UTM_EPSG: 'EPSG:32610'
+  LNG_RANGE: [-123.3981901500886, -121.3162809704011]
+  LAT_RANGE: [48.66168870750432, 49.44287858179474]

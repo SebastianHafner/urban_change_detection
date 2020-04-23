@@ -1,0 +1,23 @@
+_BASE_: "stockholm.yaml"
+
+SATELLITE_DATA:
+  DATE_RANGE: ['2018-06-01', '2018-09-01']
+  RECORDS:
+    - SENSOR: 's2toa'
+      BANDS: 'tm'
+      PRODUCT: 'cloud_free_mosaic'
+      NORMALIZE: True
+
+BUILDING_FOOTPRINTS:
+  INCLUDE: True
+  PIXEL_PERCENTAGE: True
+
+SAMPLING:
+  TYPE: 'density'
+  SAMPLE_SIZE: 30
+  PATCH_SIZE: 256
+
+DOWNLOAD:
+  TYPE: 'drive'
+  DRIVE_FOLDER: 'gee_test_exports'
+  FORMAT: 'TFRecord'

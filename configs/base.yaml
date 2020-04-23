@@ -1,0 +1,38 @@
+GEE_USERNAME: 'hafnersailing'
+
+PIXEL_SPACING: 10
+CRS: 'UTM'
+ERROR_MARGIN: 0.01
+PATH: 'C:/Users/hafne/urban_extraction/data/samples/'
+
+SATELLITE_DATA:
+  DATE_RANGE: ['2018-06-01', '2018-09-01']
+  RECORDS:
+    - SENSOR: 's2toa'
+      BANDS: 'tm'
+      PRODUCT: 'cloud_free_mosaic'
+      NORMALIZE: True
+
+BUILDING_FOOTPRINTS:
+  PIXEL_PERCENTAGE: True
+  ASSETS: []
+
+ROI:
+  ID: 'city_name'
+  UTM_EPSG: ''
+  LNG_RANGE: [0, 0]
+  LAT_RANGE: [0, 0]
+
+SAMPLING:
+  PATCH_SIZE: 256
+  SAMPLE_FRACTION: 0.3
+  MAX_SAMPLE_SIZE: 800
+  NEIGHBORHOOD_SIZE: 50
+  SEED: 7
+
+DOWNLOAD:
+  TYPE: '' # drive or cloud
+  BUCKET_NAME: 'urban_extraction_buildings'
+  DRIVE_FOLDER: 'folder_name'
+  TABLE_FORMAT: 'GeoJSON'
+  IMAGE_FORMAT: 'GeoTIFF'
