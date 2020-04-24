@@ -1,13 +1,14 @@
 import torchvision.transforms.functional as TF
 import numpy as np
+import torch
 
 
 class Numpy2Torch(object):
-    def __call__(self, args):
-        input, label, image_path = args
-        input_t = TF.to_tensor(input)
-        label = TF.to_tensor(label)
-        return input_t, label, image_path
+    def __call__(self, sample):
+        img, label = sample
+        img_tensor = TF.to_tensor(img)
+        label_tensor = TF.to_tensor(label)
+        return img_tensor, label_tensor
 
 
 # Performs uniform cropping on images
@@ -15,64 +16,62 @@ class UniformCrop(object):
     def __init__(self, crop_size):
         self.crop_size = crop_size
 
-    def random_crop(self, input, label):
-        image_size = input.shape[-2]
-        crop_limit = image_size - self.crop_size
-        x, y = np.random.randint(0, crop_limit, size=2)
+    def random_crop(self, img: torch.Tensor, label: torch.Tensor):
+        _, height, width = img.shape
+        crop_limit_x = width - self.crop_size
+        crop_limit_y = height - self.crop_size
+        x = np.random.randint(0, crop_limit_x)
+        y = np.random.randint(0, crop_limit_y)
 
-        input = input[y:y+self.crop_size, x:x+self.crop_size, :]
-        label = label[y:y+self.crop_size, x:x+self.crop_size]
-        return input, label
+        img = img[:, y:y+self.crop_size, x:x+self.crop_size]
+        label = label[:, y:y+self.crop_size, x:x+self.crop_size]
+        return img, label
 
-    def __call__(self, args):
-        input, label, image_path = args
-        input, label = self.random_crop(input, label)
-        return input, label, image_path
+    def __call__(self, sample):
+        img, label = sample
+        img, label = self.random_crop(img, label)
+        return img, label
 
 
 class ImportanceRandomCrop(UniformCrop):
-    def __call__(self, args):
-        input, label, image_path = args
+    def __call__(self, sample):
 
-        SAMPLE_SIZE = 5  # an arbitrary number that I came up with
-        BALANCING_FACTOR = 200
+        img, label = sample
 
-        random_crops = [self.random_crop(input, label) for i in range(SAMPLE_SIZE)]
-        # TODO Multi class vs edge mask
-        weights = []
-        for input, label in random_crops:
-            if label.shape[2] >= 4:
-                # Damage detection, multi class, excluding backround
-                weights.append(label[...,:-1].sum())
-            elif label.shape[2] > 1:
-                # Edge Mask, excluding edge masks
-                weights.append(label[...,0].sum())
-            else:
-                weights.append(label.sum())
-        crop_weights = np.array([label.sum() for input, label in random_crops]) + BALANCING_FACTOR
+        sample_size = 5
+        balancing_factor = 200
+
+        random_crops = [self.random_crop(img, label) for i in range(sample_size)]
+        crop_weights = np.array([crop_label.sum() for crop_img, crop_label in random_crops]) + balancing_factor
         crop_weights = crop_weights / crop_weights.sum()
 
-        sample_idx = np.random.choice(SAMPLE_SIZE, p=crop_weights)
-        input, label = random_crops[sample_idx]
+        sample_idx = np.random.choice(sample_size, p=crop_weights)
+        img, label = random_crops[sample_idx]
 
-        return input, label, image_path
+        return img, label
 
 
-class RandomFlipRotate(object):
-    def __call__(self, args):
-        input, label, image_path = args
-        _hflip = np.random.choice([True, False])
-        _vflip = np.random.choice([True, False])
-        _rot = np.random.randint(0, 360)
+class RandomFlip(object):
+    def __call__(self, sample):
+        img, label = sample
+        h_flip = np.random.choice([True, False])
+        v_flip = np.random.choice([True, False])
 
-        if _hflip:
-            input = np.flip(input, axis=0)
+        if h_flip:
+            img = np.flip(img, axis=0)
             label = np.flip(label, axis=0)
 
-        if _vflip:
-            input = np.flip(input, axis=1)
+        if v_flip:
+            img = np.flip(img, axis=1)
             label = np.flip(label, axis=1)
 
-        input = ndimage.rotate(input, _rot, reshape=False).copy()
-        label = ndimage.rotate(label, _rot, reshape=False).copy()
-        return input, label, image_path
+        return img, label
+
+
+class RandomRotate(object):
+    def __call__(self, sample):
+        img, label = sample
+        rotation = np.random.randint(0, 360)
+        img = ndimage.rotate(img, rotation, reshape=False).copy()
+        label = ndimage.rotate(label, rotation, reshape=False).copy()
+        return img, label

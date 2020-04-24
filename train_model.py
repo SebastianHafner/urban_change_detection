@@ -72,8 +72,10 @@ def train(net, cfg):
     elif cfg.AUGMENTATION.CROP_TYPE == 'importance':
         trfm.append(aug.ImportanceRandomCrop(crop_size=cfg.AUGMENTATION.CROP_SIZE))
     # TODO: separate for flip and rotate
-    if cfg.AUGMENTATION.RANDOM_FLIP and cfg.AUGMENTATION.RANDOM_ROTATE:
-        trfm.append(aug.RandomFlipRotate())
+    if cfg.AUGMENTATION.RANDOM_FLIP:
+        trfm.append(aug.RandomFlip())
+    if cfg.AUGMENTATION.RANDOM_ROTATE:
+        trfm.append(aug.RandomRotate())
     trfm = transforms.Compose(trfm)
 
     # reset the generators
@@ -88,16 +90,11 @@ def train(net, cfg):
     dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
 
     epochs = cfg.TRAINER.EPOCHS
-
     for epoch in range(1, epochs + 1):
         print(f'Starting epoch {epoch}/{epochs}.')
 
         epoch_loss = 0
         net.train()
-
-        loss_set, f1_set = [], []
-        precision_set, recall_set = [], []
-        positive_pixels_set = []  # Used to evaluated image over sampling techniques
 
         for i, batch in enumerate(dataloader):
             optimizer.zero_grad()
@@ -114,8 +111,6 @@ def train(net, cfg):
             loss.backward()
             optimizer.step()
 
-            loss_set.append(loss.item())
-
         # evaluate model after every epoch
         model_eval(net, cfg, device, run_type='test', epoch=epoch)
         model_eval(net, cfg, device, run_type='train', epoch=epoch)
@@ -124,7 +119,7 @@ def train(net, cfg):
 def model_eval(net, cfg, device, run_type, epoch):
 
 
-    def evaluate(y_true, y_pred, img_filename):
+    def evaluate(y_true, y_pred):
         y_true = y_true.detach()
         y_pred = y_pred.detach()
         y_true_set.append(y_true.cpu())
@@ -132,19 +127,36 @@ def model_eval(net, cfg, device, run_type, epoch):
 
         measurer.add_sample(y_true, y_pred)
 
-    # transformations
-    trfm = []
-    trfm.append(aug.Numpy2Torch())
-    trfm = transforms.Compose(trfm)
+    dataset = datasets.OneraDataset(cfg, run_type)
+    dataloader_kwargs = {
+        'batch_size': 1,
+        'num_workers': cfg.DATALOADER.NUM_WORKER,
+        'shuffle': False,
+        'drop_last': False,
+        'pin_memory': True,
+    }
+    dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
 
-    dataset = datasets.OneraDataset(cfg, run_type, trfm)
-    inference_loop(net, cfg, device, evaluate, max_samples = max_samples, dataset=dataset)
+    y_true_set, y_pred_set = [], []
+    with torch.no_grad():
+        for step, batch in enumerate(dataloader):
+            img = batch['img'].to(device)
+            y_true = batch['label'].to(device)
+            y_pred = net(img)
+            y_pred = torch.sigmoid(y_pred)
+            y_pred = torch.gt(y_pred, 0.5).float()
 
-    # Summary gathering ===
+            y_true_set.append(y_true)
+            y_pred_set.append(y_pred)
 
-    print(f'Computing {run_type} F1 score ', end=' ', flush=True)
+
+
+
 
     f1 = measurer.compute_f1()
+
+
+    print(f'Computing {run_type} F1 score ', end=' ', flush=True)
     fpr, fnr = measurer.compute_basic_metrics()
     maxF1 = f1.max()
     argmaxF1 = f1.argmax()
@@ -194,3 +206,5 @@ if __name__ == '__main__':
             sys.exit(0)
         except SystemExit:
             os._exit(0)
+
+

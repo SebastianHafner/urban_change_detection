@@ -11,7 +11,7 @@ DATALOADER:
   SHUFFLE: True
 
 DATASET:
-  PATH: '/storage/shafner/urban_change_detection/Onera/'
+  PATH: 'C:/Users/shafner/urban_change_detection/OSCD_dataset/preprocessed/'
   MODE: 'optical' # optical, radar or fusion
   SENTINEL1:
     BANDS: ['VV', 'VH']
@@ -27,7 +27,7 @@ OUTPUT_BASE_DIR: '/storage/shafner/urban_change_detection/run_logs/'
 
 TRAINER:
   LR: 1e-4
-  BATCH_SIZE: 16
+  BATCH_SIZE: 2
   EPOCHS: 50
 
 AUGMENTATION:

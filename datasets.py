@@ -3,7 +3,7 @@ from torchvision import transforms
 from pathlib import Path
 import numpy as np
 import augmentations as aug
-import utils
+
 
 
 class OneraDataset(torch.utils.data.Dataset):
@@ -56,22 +56,20 @@ class OneraDataset(torch.utils.data.Dataset):
 
         s2_dir = self.root_dir / city / 'sentinel2'
 
-        s2_pre_file = s2_dir / f'sentinel2_{city}_pre.tif'
-        pre, _, _ = utils.read_tif(s2_pre_file)
+        s2_pre_file = s2_dir / f'sentinel2_{city}_pre.npy'
+        pre = np.load(s2_pre_file)
 
-        s2_post_file = s2_dir / f'sentinel2_{city}_post.tif'
-        post, _, _ = utils.read_tif(s2_post_file)
+        s2_post_file = s2_dir / f'sentinel2_{city}_post.npy'
+        post = np.load(s2_post_file)
 
         img = np.concatenate([pre, post], axis=-1)
 
-        return np.nan_to_num(img).astype(np.float32)
+        return img.astype(np.float32)
 
     def _get_label_data(self, city):
-
-        label_file = self.root_dir / city / 'label' / f'urbanchange_{city}.tif'
-        img, _, _ = utils.read_tif(label_file)
-
-        return np.nan_to_num(img).astype(np.float32)
+        label_file = self.root_dir / city / 'label' / f'urbanchange_{city}.npy'
+        label = np.load(label_file).astype(np.float32)
+        return label
 
     def _get_feature_selection(self, features, selection):
         feature_selection = [False for _ in range(len(features))]

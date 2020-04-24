@@ -2,6 +2,7 @@ import numpy as np
 from pathlib import Path
 import utils
 import cv2
+import tifffile
 
 
 def get_band(file: Path) -> str:
@@ -13,26 +14,24 @@ def combine_bands(folder: Path) -> tuple:
     bands = ['B02', 'B03', 'B04', 'B08', 'B11', 'B12']
     n_bands = len(bands)
 
-    data = {get_band(file): file for file in folder.glob('**/*')}
+    # using blue band as reference (10 m) to create img
+    blue_file = folder / 'B02.tif'
+    blue = tifffile.imread(str(blue_file))
+    img = np.ndarray((*blue.shape, n_bands), dtype=np.float32)
 
-    # using blue band as reference (10 m)
-    blue, transform, crs = utils.read_tif(data['B02'])
-    h, w, _ = blue.shape
-
-    img = np.ndarray((h, w, n_bands), dtype=np.float32)
     for i, band in enumerate(bands):
-        arr, _, _ = utils.read_tif(data[band])
-        arr = arr[:, :, 0]
+        band_file = folder / f'{band}.tif'
+        arr = tifffile.imread(str(band_file))
         band_h, band_w = arr.shape
 
         # up-sample 20 m bands
-        if not band_h == h and not band_w == w:
-            arr = cv2.resize(arr, (w, h), interpolation=cv2.INTER_CUBIC)
+        # arr = cv2.resize(arr, (w, h), interpolation=cv2.INTER_CUBIC)
 
+        # rescaling image to [0, 1]
         arr = np.clip(arr / 10000, a_min=0, a_max=1)
         img[:, :, i] = arr
 
-    return img, transform, crs
+    return img
 
 
 def process_city(img_folder: Path, label_folder: Path, city: str, new_root: Path) -> None:
@@ -46,29 +45,34 @@ def process_city(img_folder: Path, label_folder: Path, city: str, new_root: Path
     for pre_post in ['pre', 'post']:
 
         # get data
-        from_folder = img_folder / city / 'imgs_1' if pre_post == 'pre' else img_folder / city / 'imgs_2'
-        img, transform, crs = combine_bands(from_folder)
+        from_folder = img_folder / city / 'imgs_1_rect' if pre_post == 'pre' else img_folder / city / 'imgs_2_rect'
+        img = combine_bands(from_folder)
 
         # save data
         to_folder = new_parent / 'sentinel2'
         to_folder.mkdir(exist_ok=True)
-        save_file = to_folder / f'sentinel2_{city}_{pre_post}.tif'
-        utils.write_tif(save_file, img, transform, crs)
+
+        save_file = to_folder / f'sentinel2_{city}_{pre_post}.npy'
+        np.save(save_file, img)
 
     from_label_file = label_folder / city / 'cm' / f'{city}-cm.tif'
-    label, _, _ = utils.read_tif(from_label_file)
+    label = tifffile.imread(str(from_label_file))
     label = label - 1
 
-    to_label_file = new_parent / 'label' / f'urbanchange_{city}.tif'
+    to_label_file = new_parent / 'label' / f'urbanchange_{city}.npy'
     to_label_file.parent.mkdir(exist_ok=True)
-    utils.write_tif(to_label_file, label, transform, crs)
+    np.save(to_label_file, label)
 
 
 if __name__ == '__main__':
-    # assume unchanged Onera dataset
-    IMG_FOLDER = Path('C:/Users/hafne/urban_change_detection/data/Onera/images/')
-    LABEL_FOLDER = Path('C:/Users/hafne/urban_change_detection/data/Onera/labels/')
-    NEW_ROOT = Path('C:/Users/hafne/urban_change_detection/data/Onera/preprocessed/')
+    # assume unchanged OSCD dataset
+    # IMG_FOLDER = Path('C:/Users/hafne/urban_change_detection/data/Onera/images/')
+    IMG_FOLDER = Path('C:/Users/shafner/urban_change_detection/OSCD_dataset/images/')
+    # LABEL_FOLDER = Path('C:/Users/hafne/urban_change_detection/data/Onera/labels/')
+    LABEL_FOLDER = Path('C:/Users/shafner/urban_change_detection/OSCD_dataset/labels/')
+
+    # NEW_ROOT = Path('C:/Users/hafne/urban_change_detection/data/Onera/preprocessed/')
+    NEW_ROOT = Path('C:/Users/shafner/urban_change_detection/OSCD_dataset/preprocessed/')
 
     cities = ['abudhabi', 'aguasclaras', 'beihai', 'beirut', 'bercy', 'bordeaux', 'cupertino', 'hongkong',
               'mumbai', 'nantes', 'paris', 'pisa', 'rennes', 'saclay_e']

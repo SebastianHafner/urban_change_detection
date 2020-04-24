@@ -6,3 +6,9 @@ DATASET:
     BANDS: ['B2', 'B3', 'B4', 'B8', 'B11', 'B12']
     TEMPORAL_MODE: 'bi-temporal'
   TEST_CITIES: ['abudhabi']
+
+AUGMENTATION:
+  CROP_TYPE: 'uniform' # uniform or importance
+  CROP_SIZE: 64
+  RANDOM_FLIP: False
+  RANDOM_ROTATE: False
