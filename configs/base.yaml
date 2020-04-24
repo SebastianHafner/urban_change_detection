@@ -2,7 +2,6 @@ SEED: 7
 
 MODEL:
   TYPE: 'unet' # should support unet, unet_lstm, siammese_conc, siamese_diff,
-  BINARY_CLASSIFICATION: True
   OUT_CHANNELS: 1
   IN_CHANNELS: 2
   LOSS_TYPE: 'FrankensteinLoss'
@@ -10,16 +9,19 @@ MODEL:
 DATALOADER:
   NUM_WORKER: 8
   SHUFFLE: True
+
+DATASET:
+  PATH: '/storage/shafner/urban_change_detection/Onera/'
+  MODE: 'optical' # optical, radar or fusion
   SENTINEL1:
     BANDS: ['VV', 'VH']
     TEMPORAL_MODE: 'bi-temporal'
   SENTINEL2:
     BANDS: ['B2', 'B3', 'B4', 'B8', 'B11', 'B12']
     TEMPORAL_MODE: 'bi-temporal'
-
-DATASETS:
-  TRAIN: '/storage/shafner/urban_change_detection/Onera/'
-  TEST: '/storage/shafner/urban_change_detection/Onera/'
+  ALL_CITIES: ['abudhabi', 'aguasclaras', 'beihai', 'beirut', 'bercy', 'bordeaux', 'cupertino', 'hongkong', 'lasvegas',
+               'mumbai', 'nantes', 'paris', 'pisa', 'rennes', 'saclay_e']
+  TEST_CITIES: ['abudhabi']
 
 OUTPUT_BASE_DIR: '/storage/shafner/urban_change_detection/run_logs/'
 
@@ -29,7 +31,7 @@ TRAINER:
   EPOCHS: 50
 
 AUGMENTATION:
-  CROP_TYPE: 'none' # importance or none
-  CROP_SIZE: 1024
+  CROP_TYPE: 'uniform' # uniform or importance
+  CROP_SIZE: 64
   RANDOM_FLIP: True
   RANDOM_ROTATE: True

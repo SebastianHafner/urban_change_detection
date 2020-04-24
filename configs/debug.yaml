@@ -1,2 +1,8 @@
 _BASE_: "base.yaml"
 
+DATASET:
+  MODE: 'optical'
+  SENTINEL2:
+    BANDS: ['B2', 'B3', 'B4', 'B8', 'B11', 'B12']
+    TEMPORAL_MODE: 'bi-temporal'
+  TEST_CITIES: ['abudhabi']
