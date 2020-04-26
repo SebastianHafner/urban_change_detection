@@ -150,6 +150,7 @@ class Unet(nn.Module):
         x12d = self.do12d(F.relu(self.bn12d(self.conv12d(x1d))))
         x11d = self.conv11d(x12d)
 
-        return self.sm(x11d)
+        return x11d
+        # return self.sm(x11d)
 
     

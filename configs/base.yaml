@@ -11,7 +11,7 @@ DATALOADER:
   SHUFFLE: True
 
 DATASET:
-  PATH: 'C:/Users/shafner/urban_change_detection/OSCD_dataset/preprocessed/'
+  PATH: '/storage/shafner/urban_change_detection/OSCD_dataset/preprocessed/'
   MODE: 'optical' # optical, radar or fusion
   SENTINEL1:
     BANDS: ['VV', 'VH']
@@ -19,9 +19,9 @@ DATASET:
   SENTINEL2:
     BANDS: ['B2', 'B3', 'B4', 'B8', 'B11', 'B12']
     TEMPORAL_MODE: 'bi-temporal'
-  ALL_CITIES: ['abudhabi', 'aguasclaras', 'beihai', 'beirut', 'bercy', 'bordeaux', 'cupertino', 'hongkong', 'lasvegas',
+  ALL_CITIES: ['abudhabi', 'aguasclaras', 'beihai', 'beirut', 'bercy', 'bordeaux', 'cupertino', 'hongkong',
                'mumbai', 'nantes', 'paris', 'pisa', 'rennes', 'saclay_e']
-  TEST_CITIES: ['abudhabi']
+  TEST_CITIES: []
 
 OUTPUT_BASE_DIR: '/storage/shafner/urban_change_detection/run_logs/'
 

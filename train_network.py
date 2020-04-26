@@ -16,12 +16,12 @@ from experiment_manager.config import config
 
 # custom stuff
 import augmentations as aug
-import evaluation_metrics as metrics
+import evaluation_metrics as eval
 import loss_functions as lf
 import datasets
 
 # all networks
-from networks import network
+from networks import network, unet
 
 # logging
 import wandb
@@ -64,18 +64,26 @@ def train(net, cfg):
         criterion = lambda pred, gts: 2 * F.binary_cross_entropy_with_logits(pred, gts) + lf.soft_dice_loss(pred, gts)
     elif cfg.MODEL.LOSS_TYPE == 'FrankensteinLoss':
         criterion = lambda pred, gts: F.binary_cross_entropy_with_logits(pred, gts) + lf.jaccard_like_balanced_loss(pred, gts)
+    else:
+        criterion = lf.soft_dice_loss
+
+    # weight_tensor = torch.FloatTensor(2)
+    # weight_tensor[0] = 0.20
+    # weight_tensor[1] = 0.80
+    # criterion = torch.nn.CrossEntropyLoss(weight_tensor.to(device)).to(device)
+    # criterion = torch.nn.CrossEntropyLoss().to(device)
+    criterion = F.binary_cross_entropy_with_logits
 
     trfm = []
-    trfm.append(aug.Numpy2Torch())
     if cfg.AUGMENTATION.CROP_TYPE == 'uniform':
         trfm.append(aug.UniformCrop(crop_size=cfg.AUGMENTATION.CROP_SIZE))
     elif cfg.AUGMENTATION.CROP_TYPE == 'importance':
         trfm.append(aug.ImportanceRandomCrop(crop_size=cfg.AUGMENTATION.CROP_SIZE))
-    # TODO: separate for flip and rotate
     if cfg.AUGMENTATION.RANDOM_FLIP:
         trfm.append(aug.RandomFlip())
     if cfg.AUGMENTATION.RANDOM_ROTATE:
         trfm.append(aug.RandomRotate())
+    trfm.append(aug.Numpy2Torch())
     trfm = transforms.Compose(trfm)
 
     # reset the generators
@@ -87,94 +95,105 @@ def train(net, cfg):
         'drop_last': True,
         'pin_memory': True,
     }
+    dataloader_kwargs = {
+        'batch_size': cfg.TRAINER.BATCH_SIZE,
+        'shuffle': cfg.DATALOADER.SHUFFLE,
+        'drop_last': False,
+    }
     dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
 
+    positive_pixels = 0
+    pixels = 0
     epochs = cfg.TRAINER.EPOCHS
-    for epoch in range(1, epochs + 1):
-        print(f'Starting epoch {epoch}/{epochs}.')
+    for epoch in range(epochs):
+        # print(f'Starting epoch {epoch}/{epochs}.')
 
-        epoch_loss = 0
+        loss_tracker = 0
         net.train()
 
         for i, batch in enumerate(dataloader):
+
+            pre_img = batch['pre_img'].to(device)
+            post_img = batch['post_img'].to(device)
+
+            label = batch['label'].to(device)
+
             optimizer.zero_grad()
 
-            x = batch['img'].to(device)
-            y_gts = batch['label'].to(device)
+            output = net(pre_img, post_img)
 
-            y_pred = net(x)
-
-            loss = criterion(y_pred, y_gts)
-
-            epoch_loss += loss.item()
-
+            # loss = F.binary_cross_entropy_with_logits(output, label)
+            loss = criterion(output, label)
+            loss_tracker += loss.item()
             loss.backward()
             optimizer.step()
 
-        # evaluate model after every epoch
-        model_eval(net, cfg, device, run_type='test', epoch=epoch)
-        model_eval(net, cfg, device, run_type='train', epoch=epoch)
+            # TODO: compute positive pixel ratio
+            positive_pixels += torch.sum(label).item()
+            pixels += torch.numel(label)
+
+        if epoch % 10 == 0:
+            # evaluate model after every epoch
+            print(f'epoch {epoch} / {cfg.TRAINER.EPOCHS}')
+            print(f'loss {loss_tracker:.5f}')
+            print(f'positive pixel ratio: {positive_pixels / pixels:.3f}')
+            positive_pixels = 0
+            pixels = 0
+            model_eval(net, cfg, device, run_type='train', epoch=epoch)
+            # model_eval(net, cfg, device, run_type='test', epoch=epoch)
 
 
 def model_eval(net, cfg, device, run_type, epoch):
 
+    def evaluate(y_true: torch.Tensor, y_pred: torch.Tensor):
+        y_true = torch.flatten(y_true)
+        y_pred = torch.flatten(y_pred)
+        precision = eval.precision(y_true, y_pred, dim=0)
+        recall = eval.recall(y_true, y_pred, dim=0)
+        f1 = eval.f1_score(y_true, y_pred, dim=0)
 
-    def evaluate(y_true, y_pred):
-        y_true = y_true.detach()
-        y_pred = y_pred.detach()
-        y_true_set.append(y_true.cpu())
-        y_pred_set.append(y_pred.cpu())
+        precision = precision.item()
+        recall = recall.item()
+        f1 = f1.item()
 
-        measurer.add_sample(y_true, y_pred)
+        return f1, precision, recall
 
     dataset = datasets.OneraDataset(cfg, run_type)
     dataloader_kwargs = {
         'batch_size': 1,
-        'num_workers': cfg.DATALOADER.NUM_WORKER,
         'shuffle': False,
-        'drop_last': False,
-        'pin_memory': True,
     }
     dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
 
     y_true_set, y_pred_set = [], []
     with torch.no_grad():
+        net.eval()
         for step, batch in enumerate(dataloader):
-            img = batch['img'].to(device)
+            pre_img = batch['pre_img'].to(device)
+            post_img = batch['post_img'].to(device)
             y_true = batch['label'].to(device)
-            y_pred = net(img)
+
+            y_pred = net(pre_img, post_img)
             y_pred = torch.sigmoid(y_pred)
-            y_pred = torch.gt(y_pred, 0.5).float()
-
-            y_true_set.append(y_true)
-            y_pred_set.append(y_pred)
+            threshold = 0.5
+            y_pred = torch.gt(y_pred, threshold).float()
 
 
 
+            y_true_set.append(y_true.flatten())
+            y_pred_set.append(y_pred.flatten())
+
+    y_true_set = torch.cat(y_true_set)
+    y_pred_set = torch.cat(y_pred_set)
+
+    f1, precision, recall = evaluate(y_true_set, y_pred_set)
+    print(f'{run_type} f1: {f1:.3f}; precision: {precision:.3f}; recall: {recall:.3f}')
 
 
-    f1 = measurer.compute_f1()
-
-
-    print(f'Computing {run_type} F1 score ', end=' ', flush=True)
-    fpr, fnr = measurer.compute_basic_metrics()
-    maxF1 = f1.max()
-    argmaxF1 = f1.argmax()
-    best_fpr = fpr[argmaxF1]
-    best_fnr = fnr[argmaxF1]
-    print(maxF1.item(), flush=True)
-
-    set_name = 'test_set' if run_type == 'TEST' else 'training_set'
-    wandb.log({f'{set_name} max F1': maxF1,
-               f'{set_name} argmax F1': argmaxF1,
-               # f'{set_name} Average Precision': ap,
-               f'{set_name} false positive rate': best_fpr,
-               f'{set_name} false negative rate': best_fnr,
-               'step': step,
-               'epoch': epoch,
-               })
-
-
+    # wandb.log({
+    #     f'{run_type} F1': f1,
+    #     'epoch': epoch,
+    # })
 
 
 if __name__ == '__main__':
@@ -185,7 +204,9 @@ if __name__ == '__main__':
     cfg = setup(args)
 
     # TODO: load network from config
-    net = network.U_Net(cfg.MODEL.IN_CHANNELS, cfg.MODEL.OUT_CHANNELS, [1, 2])
+    # net = network.U_Net(cfg.MODEL.IN_CHANNELS, cfg.MODEL.OUT_CHANNELS, [1, 2])
+    # net = network.U_Net(6, 1, [1, 2])
+    net = unet.Unet(12, 1)
 
     # wandb.init(
     #     name=cfg.NAME,

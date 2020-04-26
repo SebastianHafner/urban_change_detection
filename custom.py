@@ -3,7 +3,6 @@ from torchvision import transforms
 from skimage import io
 import numpy as np
 import pandas as pd
-from skimage import io
 import torch
 
 class MyDataset(Dataset):

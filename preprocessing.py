@@ -67,12 +67,15 @@ def process_city(img_folder: Path, label_folder: Path, city: str, new_root: Path
 if __name__ == '__main__':
     # assume unchanged OSCD dataset
     # IMG_FOLDER = Path('C:/Users/hafne/urban_change_detection/data/Onera/images/')
-    IMG_FOLDER = Path('C:/Users/shafner/urban_change_detection/OSCD_dataset/images/')
+    # IMG_FOLDER = Path('C:/Users/shafner/urban_change_detection/OSCD_dataset/images/')
+    IMG_FOLDER = Path('/storage/shafner/urban_change_detection/OSCD_dataset/images/')
+
     # LABEL_FOLDER = Path('C:/Users/hafne/urban_change_detection/data/Onera/labels/')
-    LABEL_FOLDER = Path('C:/Users/shafner/urban_change_detection/OSCD_dataset/labels/')
+    # LABEL_FOLDER = Path('C:/Users/shafner/urban_change_detection/OSCD_dataset/labels/')
+    LABEL_FOLDER = Path('/storage/shafner/urban_change_detection/OSCD_dataset/labels/')
 
     # NEW_ROOT = Path('C:/Users/hafne/urban_change_detection/data/Onera/preprocessed/')
-    NEW_ROOT = Path('C:/Users/shafner/urban_change_detection/OSCD_dataset/preprocessed/')
+    NEW_ROOT = Path('/storage/shafner/urban_change_detection/OSCD_dataset/preprocessed')
 
     cities = ['abudhabi', 'aguasclaras', 'beihai', 'beirut', 'bercy', 'bordeaux', 'cupertino', 'hongkong',
               'mumbai', 'nantes', 'paris', 'pisa', 'rennes', 'saclay_e']

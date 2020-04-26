@@ -5,7 +5,6 @@ import numpy as np
 import augmentations as aug
 
 
-
 class OneraDataset(torch.utils.data.Dataset):
     def __init__(self, cfg, dataset: str, transform: list = None):
         super().__init__()
@@ -40,29 +39,31 @@ class OneraDataset(torch.utils.data.Dataset):
 
         city = self.cities[index]
 
-        img = self._get_sentinel_data(city)
-        label = self._get_label_data(city)
-        img, label = self.transform((img, label))
+        pre_img = self._get_sentinel_data(city, 'pre')
+        post_img = self._get_sentinel_data(city, 'post')
 
+        label = self._get_label_data(city)
+        label = label[:, :, np.newaxis]
+
+        pre_img, post_img, label = self.transform((pre_img, post_img, label))
+        view_label = label.numpy()
         sample = {
-            'img': img,
+            'pre_img': pre_img,
+            'post_img': post_img,
             'label': label,
             'city': city
         }
 
         return sample
 
-    def _get_sentinel_data(self, city):
+    def _get_sentinel_data(self, city, t):
 
         s2_dir = self.root_dir / city / 'sentinel2'
 
-        s2_pre_file = s2_dir / f'sentinel2_{city}_pre.npy'
-        pre = np.load(s2_pre_file)
+        s2_file = s2_dir / f'sentinel2_{city}_{t}.npy'
+        img = np.load(s2_file)
 
-        s2_post_file = s2_dir / f'sentinel2_{city}_post.npy'
-        post = np.load(s2_post_file)
-
-        img = np.concatenate([pre, post], axis=-1)
+        # TODO: subset according to band selection
 
         return img.astype(np.float32)
 

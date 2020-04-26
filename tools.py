@@ -8,7 +8,6 @@ from torchvision import datasets, transforms
 from torch.autograd import Variable
 import numpy as np
 import torchnet as tnt
-from skimage import io
 import cv2
 
 USE_CUDA = torch.cuda.is_available()

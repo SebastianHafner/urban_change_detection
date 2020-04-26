@@ -1,28 +1,28 @@
 import torch
 
 
-def true_pos(y_true, y_pred, dim=0):
+def true_pos(y_true: torch.Tensor, y_pred: torch.Tensor, dim=0):
     return torch.sum(y_true * torch.round(y_pred), dim=dim)
 
 
-def false_pos(y_true, y_pred, dim=0):
+def false_pos(y_true: torch.Tensor, y_pred: torch.Tensor, dim=0):
     return torch.sum(y_true * (1. - torch.round(y_pred)), dim=dim)
 
 
-def false_neg(y_true, y_pred, dim=0):
+def false_neg(y_true: torch.Tensor, y_pred: torch.Tensor, dim=0):
     return torch.sum((1. - y_true) * torch.round(y_pred), dim=dim)
 
 
-def precision(y_true, y_pred, dim):
-    denom = (true_pos(y_true, y_pred, dim) + false_pos(y_true, y_pred, dim))
-    denom = torch.clamp(denom, 10e-05)
-    return true_pos(y_true, y_pred, dim) / denom
+def precision(y_true: torch.Tensor, y_pred: torch.Tensor, dim):
+    denominator = (true_pos(y_true, y_pred, dim) + false_pos(y_true, y_pred, dim))
+    denominator = torch.clamp(denominator, 10e-05)
+    return true_pos(y_true, y_pred, dim) / denominator
 
 
-def recall(y_true, y_pred, dim):
-    denom = (true_pos(y_true, y_pred, dim) + false_neg(y_true, y_pred, dim))
-    denom = torch.clamp(denom, 10e-05)
-    return true_pos(y_true, y_pred, dim) / denom
+def recall(y_true: torch.Tensor, y_pred: torch.Tensor, dim):
+    denominator = (true_pos(y_true, y_pred, dim) + false_neg(y_true, y_pred, dim))
+    denominator = torch.clamp(denominator, 10e-05)
+    return true_pos(y_true, y_pred, dim) / denominator
 
 
 def f1_score(gts: torch.Tensor, preds: torch.Tensor, dim=(-1, -2)):
