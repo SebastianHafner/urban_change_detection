@@ -5,23 +5,24 @@ import numpy as np
 import augmentations as aug
 
 
-class OneraDataset(torch.utils.data.Dataset):
-    def __init__(self, cfg, dataset: str, transform: list = None):
+class OSCDDataset(torch.utils.data.Dataset):
+    def __init__(self, cfg, dataset: str, no_augmentation: bool = False):
         super().__init__()
 
         self.cfg = cfg
         self.root_dir = Path(cfg.DATASET.PATH)
 
         if dataset == 'train':
-            self.cities = [city for city in cfg.DATASET.ALL_CITIES if city not in cfg.DATASET.TEST_CITIES]
+            self.cities = cfg.DATASET.TRAIN
         else:
-            self.cities = cfg.DATASET.TEST_CITIES
+            self.cities = cfg.DATASET.TEST
 
         self.length = len(self.cities)
 
-        self.transform = transform
-        if transform is None:
+        if no_augmentation:
             self.transform = transforms.Compose([aug.Numpy2Torch()])
+        else:
+            self.transform = aug.compose_transformations(cfg)
 
         self.mode = cfg.DATASET.MODE
 
@@ -46,7 +47,6 @@ class OneraDataset(torch.utils.data.Dataset):
         label = label[:, :, np.newaxis]
 
         pre_img, post_img, label = self.transform((pre_img, post_img, label))
-        view_label = label.numpy()
         sample = {
             'pre_img': pre_img,
             'post_img': post_img,
