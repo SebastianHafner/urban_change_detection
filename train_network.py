@@ -20,8 +20,9 @@ import evaluation_metrics as eval
 import loss_functions as lf
 import datasets
 
-# all networks
-from networks import network, unet
+# networks from papers and ours
+from networks import daudtetal2018
+from networks import ours
 
 # logging
 import wandb
@@ -48,10 +49,10 @@ def train(net, cfg):
     # loss functions
     if cfg.MODEL.LOSS_TYPE == 'BCEWithLogitsLoss':
         criterion = torch.nn.BCEWithLogitsLoss()
-    elif cfg.MODEL.LOSS_TYPE == 'CrossEntropyLoss':
+    elif cfg.MODEL.LOSS_TYPE == 'WeightedBCEWithLogitsLoss':
         balance_weight = [cfg.MODEL.NEGATIVE_WEIGHT, cfg.MODEL.POSITIVE_WEIGHT]
         balance_weight = torch.tensor(balance_weight).float().to(device)
-        criterion = torch.nn.CrossEntropyLoss(weight=balance_weight)
+        criterion = torch.nn.BCEWithLogitsLoss(weight=balance_weight)
     elif cfg.MODEL.LOSS_TYPE == 'SoftDiceLoss':
         criterion = lf.soft_dice_loss
     elif cfg.MODEL.LOSS_TYPE == 'SoftDiceBalancedLoss':
@@ -186,9 +187,7 @@ if __name__ == '__main__':
     cfg = setup(args)
 
     # TODO: load network from config
-    # net = network.U_Net(cfg.MODEL.IN_CHANNELS, cfg.MODEL.OUT_CHANNELS, [1, 2])
-    # net = network.U_Net(6, 1, [1, 2])
-    net = unet.Unet(12, 1)
+    net = daudtetal2018.UNet(12, 1)
 
     if not cfg.DEBUG:
         wandb.init(
