@@ -77,8 +77,11 @@ if __name__ == '__main__':
     # NEW_ROOT = Path('C:/Users/hafne/urban_change_detection/data/Onera/preprocessed/')
     NEW_ROOT = Path('/storage/shafner/urban_change_detection/OSCD_dataset/preprocessed')
 
-    cities = ['abudhabi', 'aguasclaras', 'beihai', 'beirut', 'bercy', 'bordeaux', 'cupertino', 'hongkong',
-              'mumbai', 'nantes', 'paris', 'pisa', 'rennes', 'saclay_e']
+    train_cities = ['aguasclaras', 'bercy', 'bordeaux', 'nantes', 'paris', 'rennes', 'saclay_e', 'abudhabi',
+                    'cupertino', 'pisa', 'beihai', 'hongkong', 'beirut', 'mumbai']
+    test_cities = ['brasilia', 'montpellier', 'norcia', 'rio', 'saclay_w', 'valencia', 'dubai', 'lasvegas', 'milano',
+                   'chongqing']
+    cities = train_cities + test_cities
 
     for city in cities:
         process_city(IMG_FOLDER, LABEL_FOLDER, city, NEW_ROOT)
