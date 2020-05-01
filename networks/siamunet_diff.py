@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.modules.padding import ReplicationPad2d
 
+
 class SiamUnet_diff(nn.Module):
     """SiamUnet_diff segmentation network."""
 

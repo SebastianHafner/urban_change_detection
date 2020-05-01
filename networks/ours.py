@@ -3,6 +3,8 @@ from collections import OrderedDict
 import torch.nn.functional as F
 import torch
 import torch.nn as nn
+from torch.nn.modules.padding import ReplicationPad2d
+
 
 class UNet(nn.Module):
     def __init__(self, cfg):
@@ -11,17 +13,14 @@ class UNet(nn.Module):
 
         n_channels = cfg.MODEL.IN_CHANNELS
         n_classes = cfg.MODEL.OUT_CHANNELS
-        conv_block = double_conv
 
         super(UNet, self).__init__()
 
         first_chan = cfg.MODEL.TOPOLOGY[0]
-        self.inc = inconv(n_channels, first_chan, conv_block)
-        self.outc = outconv(first_chan, n_classes)
+        self.inc = InConv(n_channels, first_chan, DoubleConv)
+        self.outc = OutConv(first_chan, n_classes)
         self.multiscale_context_enabled = False
         self.multiscale_context_type = False
-
-        up_block = up
 
         # Variable scale
         down_topo = cfg.MODEL.TOPOLOGY
@@ -34,19 +33,14 @@ class UNet(nn.Module):
         for idx in range(n_layers):
             is_not_last_layer = idx != n_layers-1
             in_dim = down_topo[idx]
-            out_dim = down_topo[idx+1] if is_not_last_layer else down_topo[idx] # last layer
+            out_dim = down_topo[idx+1] if is_not_last_layer else down_topo[idx]  # last layer
 
-            layer = down(in_dim, out_dim, conv_block)
+            layer = Down(in_dim, out_dim, DoubleConv)
 
             print(f'down{idx+1}: in {in_dim}, out {out_dim}')
             down_dict[f'down{idx+1}'] = layer
             up_topo.append(out_dim)
         self.down_seq = nn.ModuleDict(down_dict)
-        bottleneck_dim = out_dim
-
-        # context layer
-        if self.multiscale_context_enabled:
-            self.multiscale_context = MultiScaleContextForUNet(cfg, bottleneck_dim)
 
         # Upward layers
         for idx in reversed(range(n_layers)):
@@ -56,14 +50,17 @@ class UNet(nn.Module):
             in_dim = up_topo[x1_idx] * 2
             out_dim = up_topo[x2_idx]
 
-            layer = up_block(in_dim, out_dim, conv_block, bilinear=cfg.MODEL.SIMPLE_INTERPOLATION)
+            layer = Up(in_dim, out_dim, DoubleConv)
 
             print(f'up{idx+1}: in {in_dim}, out {out_dim}')
             up_dict[f'up{idx+1}'] = layer
 
         self.up_seq = nn.ModuleDict(up_dict)
 
-    def forward(self, x):
+    def forward(self, x1, x2):
+
+        x = torch.cat((x1, x2), 1)
+
         x1 = self.inc(x)
 
         inputs = [x1]
@@ -71,12 +68,6 @@ class UNet(nn.Module):
         for layer in self.down_seq.values():
             out = layer(inputs[-1])
             inputs.append(out)
-
-        #Multiscale context
-        if self.multiscale_context_enabled:
-            bottleneck_features = inputs.pop()
-            context = self.multiscale_context(bottleneck_features)
-            inputs.append(context)
 
         # Upward U:
         inputs.reverse()
@@ -89,47 +80,13 @@ class UNet(nn.Module):
 
         return out
 
-class MultiScaleContextForUNet(nn.Module):
-    def __init__(self, cfg, bottlneck_dim):
-        super().__init__()
-        self._cfg = cfg
-        self.multiscale_context_type = cfg.MODEL.MULTISCALE_CONTEXT.TYPE
-        self.context = self.build_multiscale_context(bottlneck_dim)
-
-    def build_multiscale_context(self, bottleneck_dim):
-        context_layers = []
-        for i, layer_dilation in enumerate(self._cfg.MODEL.MULTISCALE_CONTEXT.DILATION_TOPOLOGY):
-            layer = ContextLayer(bottleneck_dim, layer_dilation)
-            context_layers.append(layer)
-        if self.multiscale_context_type == 'Simple':
-            context = nn.Sequential(*context_layers)
-        if self.multiscale_context_type == 'PyramidSum':
-            context =  nn.ModuleList(context_layers)
-        if self.multiscale_context_type == 'ParallelSum':
-            context =  nn.ModuleList(context_layers)
-        return context
-
-    def forward(self, x):
-        if self.multiscale_context_type == 'Simple':
-            context = self.context(x)
-        elif self.multiscale_context_type == 'PyramidSum':
-            context = x
-            for layer in self.context:
-                context = layer(context)
-        elif self.multiscale_context_type == 'ParallelSum':
-            context = x
-            for layer in self.context:
-                context += layer(x)
-
-        return context
-
 
 # sub-parts of the U-Net model
-class double_conv(nn.Module):
+class DoubleConv(nn.Module):
     '''(conv => BN => ReLU) * 2'''
 
     def __init__(self, in_ch, out_ch):
-        super(double_conv, self).__init__()
+        super(DoubleConv, self).__init__()
         self.conv = nn.Sequential(
             nn.Conv2d(in_ch, out_ch, 3, padding=1),
             nn.BatchNorm2d(out_ch),
@@ -144,81 +101,9 @@ class double_conv(nn.Module):
         return x
 
 
-class triple_conv(nn.Module):
-    '''(conv => BN => ReLU) * 2'''
-
-    def __init__(self, in_ch, out_ch):
-        super(triple_conv, self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(in_ch, out_ch, 3, padding=1),
-            nn.BatchNorm2d(out_ch),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_ch, out_ch, 3, padding=1),
-            nn.BatchNorm2d(out_ch),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_ch, out_ch, 3, padding=1),
-            nn.BatchNorm2d(out_ch),
-            nn.ReLU(inplace=True),
-        )
-
-    def forward(self, x):
-        x = self.conv(x)
-        return x
-
-
-class attention_block(nn.Module):
-
-    def __init__(self, in_ch, out_ch):
-        super().__init__()
-        self.in_ch = in_ch
-        self.out_ch = out_ch
-        self.W2 = nn.Sequential(
-            nn.Conv2d(in_ch // 2, out_ch, kernel_size=1, stride=1, padding=0, bias=False),
-            nn.MaxPool2d(2)
-        )
-
-        self.W1 = nn.Conv2d(in_ch // 2, out_ch, kernel_size=1, stride=1, padding=0, bias=True)
-
-        self.psi = nn.Sequential(
-            nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels=out_ch, out_channels=1, kernel_size=1, stride=1, padding=0, bias=True),
-            nn.Sigmoid(),
-        )
-
-    def forward(self, x1, x2, ):  # X1 is upstream, X2 is skip
-
-        xl_size_orig = x2.size()
-        xl_ = self.W2(x2)
-        x1 = self.W1(x1)
-
-        psi = self.psi(xl_ + x1)
-
-        upsampled_psi = F.interpolate(psi, size=xl_size_orig[2:], mode='bilinear', align_corners=False)
-
-        # scale features with attention
-        attention = upsampled_psi.expand_as(x2)
-
-        return attention * x2
-
-
-class ContextLayer(nn.Module):
-    def __init__(self, channels, dilation, include_activation=True):
-        super().__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(channels, channels, 3, padding=dilation, dilation=dilation),
-            nn.BatchNorm2d(channels),
-        )
-        if include_activation:
-            self.conv.add_module('relu', nn.ReLU())
-
-    def forward(self, x):
-        x = self.conv(x)
-        return x
-
-
-class inconv(nn.Module):
+class InConv(nn.Module):
     def __init__(self, in_ch, out_ch, conv_block):
-        super(inconv, self).__init__()
+        super(InConv, self).__init__()
         self.conv = conv_block(in_ch, out_ch)
 
     def forward(self, x):
@@ -226,9 +111,9 @@ class inconv(nn.Module):
         return x
 
 
-class down(nn.Module):
+class Down(nn.Module):
     def __init__(self, in_ch, out_ch, conv_block):
-        super(down, self).__init__()
+        super(Down, self).__init__()
 
         self.mpconv = nn.Sequential(
             nn.MaxPool2d(2),
@@ -240,17 +125,11 @@ class down(nn.Module):
         return x
 
 
-class up(nn.Module):
-    def __init__(self, in_ch, out_ch, conv_block, bilinear=True, ):
-        super(up, self).__init__()
+class Up(nn.Module):
+    def __init__(self, in_ch, out_ch, conv_block):
+        super(Up, self).__init__()
 
-        #  would be a nice idea if the upsampling could be learned too,
-        #  but my machine do not have enough memory to handle all those weights
-        if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-        else:
-            self.up = nn.ConvTranspose2d(in_ch // 2, in_ch // 2, 2, stride=2)
-
+        self.up = nn.ConvTranspose2d(in_ch // 2, in_ch // 2, 2, stride=2)
         self.conv = conv_block(in_ch, out_ch)
 
     def forward(self, x1, x2):
@@ -260,8 +139,7 @@ class up(nn.Module):
         diffY = x2.detach().size()[2] - x1.detach().size()[2]
         diffX = x2.detach().size()[3] - x1.detach().size()[3]
 
-        x1 = F.pad(x1, (diffX // 2, diffX - diffX // 2,
-                        diffY // 2, diffY - diffY // 2))
+        x1 = F.pad(x1, (diffX // 2, diffX - diffX // 2, diffY // 2, diffY - diffY // 2))
 
         # for padding issues, see
         # https://github.com/HaiyongJiang/U-Net-Pytorch-Unstructured-Buggy/commit/0e854509c2cea854e247a9c615f175f76fbb2e3a
@@ -272,33 +150,140 @@ class up(nn.Module):
         return x
 
 
-class attention_up(nn.Module):
-    def __init__(self, in_ch, out_ch, conv_block, bilinear=True, ):
-        super().__init__()
-
-        #  would be a nice idea if the upsampling could be learned too,
-        #  but my machine do not have enough memory to handle all those weights
-        if bilinear:
-            self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
-        else:
-            self.up = nn.ConvTranspose2d(in_ch // 2, in_ch // 2, 2, stride=2)
-        self.attention = attention_block(in_ch, out_ch)
-        self.conv = conv_block(in_ch, out_ch)
-        print('in', in_ch, 'out', out_ch)
-
-    def forward(self, x1, x2):
-        x2 = self.attention(x1, x2)
-        x1 = self.up(x1)
-        x = torch.cat([x2, x1], dim=1)
-        x = self.conv(x)
-        return x
-
-
-class outconv(nn.Module):
+class OutConv(nn.Module):
     def __init__(self, in_ch, out_ch):
-        super(outconv, self).__init__()
+        super(OutConv, self).__init__()
         self.conv = nn.Conv2d(in_ch, out_ch, 1)
 
     def forward(self, x):
         x = self.conv(x)
         return x
+
+
+class TestUNet(nn.Module):
+
+    def __init__(self, input_nbr, label_nbr):
+        super(TestUNet, self).__init__()
+
+        self.input_nbr = input_nbr
+
+        self.conv11 = nn.Conv2d(input_nbr, 16, kernel_size=3, padding=1)
+        self.bn11 = nn.BatchNorm2d(16)
+        self.conv12 = nn.Conv2d(16, 16, kernel_size=3, padding=1)
+        self.bn12 = nn.BatchNorm2d(16)
+
+        self.conv21 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
+        self.bn21 = nn.BatchNorm2d(32)
+        self.conv22 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
+        self.bn22 = nn.BatchNorm2d(32)
+
+        self.conv31 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.bn31 = nn.BatchNorm2d(64)
+        self.conv32 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
+        self.bn32 = nn.BatchNorm2d(64)
+        self.conv33 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
+        self.bn33 = nn.BatchNorm2d(64)
+
+        self.conv41 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.bn41 = nn.BatchNorm2d(128)
+        self.conv42 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
+        self.bn42 = nn.BatchNorm2d(128)
+        self.conv43 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
+        self.bn43 = nn.BatchNorm2d(128)
+
+        self.upconv4 = nn.ConvTranspose2d(128, 128, kernel_size=3, padding=1, stride=2, output_padding=1)
+
+        self.conv43d = nn.ConvTranspose2d(256, 128, kernel_size=3, padding=1)
+        self.bn43d = nn.BatchNorm2d(128)
+
+        self.conv42d = nn.ConvTranspose2d(128, 128, kernel_size=3, padding=1)
+        self.bn42d = nn.BatchNorm2d(128)
+
+        self.conv41d = nn.ConvTranspose2d(128, 64, kernel_size=3, padding=1)
+        self.bn41d = nn.BatchNorm2d(64)
+
+        self.upconv3 = nn.ConvTranspose2d(64, 64, kernel_size=3, padding=1, stride=2, output_padding=1)
+
+        self.conv33d = nn.ConvTranspose2d(128, 64, kernel_size=3, padding=1)
+        self.bn33d = nn.BatchNorm2d(64)
+
+        self.conv32d = nn.ConvTranspose2d(64, 64, kernel_size=3, padding=1)
+        self.bn32d = nn.BatchNorm2d(64)
+
+        self.conv31d = nn.ConvTranspose2d(64, 32, kernel_size=3, padding=1)
+        self.bn31d = nn.BatchNorm2d(32)
+
+        self.upconv2 = nn.ConvTranspose2d(32, 32, kernel_size=3, padding=1, stride=2, output_padding=1)
+
+        self.conv22d = nn.ConvTranspose2d(64, 32, kernel_size=3, padding=1)
+        self.bn22d = nn.BatchNorm2d(32)
+
+        self.conv21d = nn.ConvTranspose2d(32, 16, kernel_size=3, padding=1)
+        self.bn21d = nn.BatchNorm2d(16)
+
+        self.upconv1 = nn.ConvTranspose2d(16, 16, kernel_size=3, padding=1, stride=2, output_padding=1)
+
+        self.conv12d = nn.ConvTranspose2d(32, 16, kernel_size=3, padding=1)
+        self.bn12d = nn.BatchNorm2d(16)
+
+        self.conv11d = nn.ConvTranspose2d(16, label_nbr, kernel_size=3, padding=1)
+
+    def forward(self, x1, x2):
+        x = torch.cat((x1, x2), 1)
+
+        """Forward method."""
+        # Stage 1
+        x11 = F.relu(self.bn11(self.conv11(x)))
+        x12 = F.relu(self.bn12(self.conv12(x11)))
+        x1p = F.max_pool2d(x12, kernel_size=2, stride=2)
+
+        # Stage 2
+        x21 = F.relu(self.bn21(self.conv21(x1p)))
+        x22 = F.relu(self.bn22(self.conv22(x21)))
+        x2p = F.max_pool2d(x22, kernel_size=2, stride=2)
+
+        # Stage 3
+        x31 = F.relu(self.bn31(self.conv31(x2p)))
+        x32 = F.relu(self.bn32(self.conv32(x31)))
+        x33 = F.relu(self.bn33(self.conv33(x32)))
+        x3p = F.max_pool2d(x33, kernel_size=2, stride=2)
+
+        # Stage 4
+        x41 = F.relu(self.bn41(self.conv41(x3p)))
+        x42 = F.relu(self.bn42(self.conv42(x41)))
+        x43 = F.relu(self.bn43(self.conv43(x42)))
+        x4p = F.max_pool2(x43, kernel_size=2, stride=2)
+
+        # Stage 4d
+        x4d = self.upconv4(x4p)
+        pad4 = ReplicationPad2d((0, x43.size(3) - x4d.size(3), 0, x43.size(2) - x4d.size(2)))
+        x4d = torch.cat((pad4(x4d), x43), 1)
+        x43d = F.relu(self.bn43d(self.conv43d(x4d)))
+        x42d = F.relu(self.bn42d(self.conv42d(x43d)))
+        x41d = F.relu(self.bn41d(self.conv41d(x42d)))
+
+        # Stage 3d
+        x3d = self.upconv3(x41d)
+        pad3 = ReplicationPad2d((0, x33.size(3) - x3d.size(3), 0, x33.size(2) - x3d.size(2)))
+        x3d = torch.cat((pad3(x3d), x33), 1)
+        x33d = F.relu(self.bn33d(self.conv33d(x3d)))
+        x32d = F.relu(self.bn32d(self.conv32d(x33d)))
+        x31d = F.relu(self.bn31d(self.conv31d(x32d)))
+
+        # Stage 2d
+        x2d = self.upconv2(x31d)
+        pad2 = ReplicationPad2d((0, x22.size(3) - x2d.size(3), 0, x22.size(2) - x2d.size(2)))
+        x2d = torch.cat((pad2(x2d), x22), 1)
+        x22d = F.relu(self.bn22d(self.conv22d(x2d)))
+        x21d = F.relu(self.bn21d(self.conv21d(x22d)))
+
+        # Stage 1d
+        x1d = self.upconv1(x21d)
+        pad1 = ReplicationPad2d((0, x12.size(3) - x1d.size(3), 0, x12.size(2) - x1d.size(2)))
+        x1d = torch.cat((pad1(x1d), x12), 1)
+        x12d = F.relu(self.bn12d(self.conv12d(x1d)))
+        x11d = self.conv11d(x12d)
+
+        return x11d
+        # return self.sm(x11d)
+

@@ -7,11 +7,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.modules.padding import ReplicationPad2d
 
-class SiamUnet_conc(nn.Module):
+
+class SiamUnetConc(nn.Module):
     """SiamUnet_conc segmentation network."""
 
     def __init__(self, input_nbr, label_nbr):
-        super(SiamUnet_conc, self).__init__()
+        super(SiamUnetConc, self).__init__()
 
         self.input_nbr = input_nbr
 
@@ -173,6 +174,6 @@ class SiamUnet_conc(nn.Module):
         x12d = self.do12d(F.relu(self.bn12d(self.conv12d(x1d))))
         x11d = self.conv11d(x12d)
 
-        return self.sm(x11d)
+        # return self.sm(x11d)
+        return x11d
 
-    
