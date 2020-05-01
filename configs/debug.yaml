@@ -1,25 +1,3 @@
 _BASE_: "base.yaml"
 
-MODEL:
-  TYPE: 'unet' # should support unet, unet_lstm, siammese_conc, siamese_diff,
-  OUT_CHANNELS: 1
-  IN_CHANNELS: 2
-  LOSS_TYPE: 'SoftDiceLoss'
-
-DATASET:
-  MODE: 'optical'
-  SENTINEL2:
-    BANDS: ['B2', 'B3', 'B4', 'B8', 'B11', 'B12']
-    TEMPORAL_MODE: 'bi-temporal'
-  TEST_CITIES: []
-
-TRAINER:
-  LR: 1e-3
-  BATCH_SIZE: 4
-  EPOCHS: 1000
-
-AUGMENTATION:
-  CROP_TYPE: 'importance' # uniform or importance
-  CROP_SIZE: 32
-  RANDOM_FLIP: False
-  RANDOM_ROTATE: False
+DEBUG: True

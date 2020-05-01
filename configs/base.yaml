@@ -1,7 +1,10 @@
 SEED: 7
+DEBUG: False
+SAVE_MODEL: False
 
 MODEL:
   TYPE: 'unet' # should support unet, unet_lstm, siammese_conc, siamese_diff,
+  TOPOLOGY: [64, 128, 256, 512,]
   OUT_CHANNELS: 1
   IN_CHANNELS: 2
   LOSS_TYPE: 'FrankensteinLoss'
@@ -19,19 +22,20 @@ DATASET:
   SENTINEL2:
     BANDS: ['B2', 'B3', 'B4', 'B8', 'B11', 'B12']
     TEMPORAL_MODE: 'bi-temporal'
-  ALL_CITIES: ['abudhabi', 'aguasclaras', 'beihai', 'beirut', 'bercy', 'bordeaux', 'cupertino', 'hongkong',
-               'mumbai', 'nantes', 'paris', 'pisa', 'rennes', 'saclay_e']
-  TEST_CITIES: []
+  TRAIN: ['aguasclaras', 'bercy', 'bordeaux', 'nantes', 'paris', 'rennes', 'saclay_e', 'abudhabi', 'cupertino',
+                'pisa', 'beihai', 'hongkong', 'beirut', 'mumbai']
+  TEST: ['brasilia', 'montpellier', 'norcia', 'rio', 'saclay_w', 'valencia', 'dubai', 'lasvegas', 'milano',
+        'chongqing']
 
 OUTPUT_BASE_DIR: '/storage/shafner/urban_change_detection/run_logs/'
 
 TRAINER:
-  LR: 1e-4
-  BATCH_SIZE: 2
-  EPOCHS: 50
+  LR: 1e-5
+  BATCH_SIZE: 4
+  EPOCHS: 400
 
 AUGMENTATION:
-  CROP_TYPE: 'uniform' # uniform or importance
-  CROP_SIZE: 64
+  CROP_TYPE: 'importance' # uniform or importance
+  CROP_SIZE: 32
   RANDOM_FLIP: True
   RANDOM_ROTATE: True
