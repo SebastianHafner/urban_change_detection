@@ -67,46 +67,22 @@ def train(net, cfg):
     else:
         criterion = lf.soft_dice_loss
 
-    # weight_tensor = torch.FloatTensor(2)
-    # weight_tensor[0] = 0.20
-    # weight_tensor[1] = 0.80
-    # criterion = torch.nn.CrossEntropyLoss(weight_tensor.to(device)).to(device)
-    # criterion = torch.nn.CrossEntropyLoss().to(device)
-    criterion = F.binary_cross_entropy_with_logits
-
-    trfm = []
-    if cfg.AUGMENTATION.CROP_TYPE == 'uniform':
-        trfm.append(aug.UniformCrop(crop_size=cfg.AUGMENTATION.CROP_SIZE))
-    elif cfg.AUGMENTATION.CROP_TYPE == 'importance':
-        trfm.append(aug.ImportanceRandomCrop(crop_size=cfg.AUGMENTATION.CROP_SIZE))
-    if cfg.AUGMENTATION.RANDOM_FLIP:
-        trfm.append(aug.RandomFlip())
-    if cfg.AUGMENTATION.RANDOM_ROTATE:
-        trfm.append(aug.RandomRotate())
-    trfm.append(aug.Numpy2Torch())
-    trfm = transforms.Compose(trfm)
-
     # reset the generators
-    dataset = datasets.OneraDataset(cfg, 'train', trfm)
+    dataset = datasets.OSCDDataset(cfg, 'train')
     dataloader_kwargs = {
         'batch_size': cfg.TRAINER.BATCH_SIZE,
-        'num_workers': cfg.DATALOADER.NUM_WORKER,
+        'num_workers': 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER,
         'shuffle':cfg.DATALOADER.SHUFFLE,
         'drop_last': True,
         'pin_memory': True,
-    }
-    dataloader_kwargs = {
-        'batch_size': cfg.TRAINER.BATCH_SIZE,
-        'shuffle': cfg.DATALOADER.SHUFFLE,
-        'drop_last': False,
     }
     dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
 
     positive_pixels = 0
     pixels = 0
+    global_step = 0
     epochs = cfg.TRAINER.EPOCHS
     for epoch in range(epochs):
-        # print(f'Starting epoch {epoch}/{epochs}.')
 
         loss_tracker = 0
         net.train()
@@ -122,28 +98,31 @@ def train(net, cfg):
 
             output = net(pre_img, post_img)
 
-            # loss = F.binary_cross_entropy_with_logits(output, label)
             loss = criterion(output, label)
             loss_tracker += loss.item()
             loss.backward()
             optimizer.step()
 
-            # TODO: compute positive pixel ratio
             positive_pixels += torch.sum(label).item()
             pixels += torch.numel(label)
 
-        if epoch % 10 == 0:
+            global_step += 1
+
+        if epoch % 2 == 0:
             # evaluate model after every epoch
             print(f'epoch {epoch} / {cfg.TRAINER.EPOCHS}')
             print(f'loss {loss_tracker:.5f}')
             print(f'positive pixel ratio: {positive_pixels / pixels:.3f}')
+            if not cfg.DEBUG:
+                wandb.log({f'positive pixel ratio': positive_pixels / pixels})
             positive_pixels = 0
             pixels = 0
-            model_eval(net, cfg, device, run_type='train', epoch=epoch)
-            # model_eval(net, cfg, device, run_type='test', epoch=epoch)
+            model_eval(net, cfg, device, run_type='train', epoch=epoch, step=global_step)
+            model_eval(net, cfg, device, run_type='test', epoch=epoch, step=global_step)
 
 
-def model_eval(net, cfg, device, run_type, epoch):
+
+def model_eval(net, cfg, device, run_type, epoch, step):
 
     def evaluate(y_true: torch.Tensor, y_pred: torch.Tensor):
         y_true = torch.flatten(y_true)
@@ -158,10 +137,12 @@ def model_eval(net, cfg, device, run_type, epoch):
 
         return f1, precision, recall
 
-    dataset = datasets.OneraDataset(cfg, run_type)
+    dataset = datasets.OSCDDataset(cfg, run_type, no_augmentation=True)
     dataloader_kwargs = {
         'batch_size': 1,
-        'shuffle': False,
+        'num_workers': 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER,
+        'shuffle':cfg.DATALOADER.SHUFFLE,
+        'pin_memory': True,
     }
     dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
 
@@ -178,8 +159,6 @@ def model_eval(net, cfg, device, run_type, epoch):
             threshold = 0.5
             y_pred = torch.gt(y_pred, threshold).float()
 
-
-
             y_true_set.append(y_true.flatten())
             y_pred_set.append(y_pred.flatten())
 
@@ -189,11 +168,14 @@ def model_eval(net, cfg, device, run_type, epoch):
     f1, precision, recall = evaluate(y_true_set, y_pred_set)
     print(f'{run_type} f1: {f1:.3f}; precision: {precision:.3f}; recall: {recall:.3f}')
 
-
-    # wandb.log({
-    #     f'{run_type} F1': f1,
-    #     'epoch': epoch,
-    # })
+    if not cfg.DEBUG:
+        wandb.log({
+            f'{run_type} f1': f1,
+            f'{run_type} precision': precision,
+            f'{run_type} recall': recall,
+            'step': step,
+            'epoch': epoch,
+        })
 
 
 if __name__ == '__main__':
@@ -208,11 +190,12 @@ if __name__ == '__main__':
     # net = network.U_Net(6, 1, [1, 2])
     net = unet.Unet(12, 1)
 
-    # wandb.init(
-    #     name=cfg.NAME,
-    #     project='onera_change_detection',
-    #     tags=['run', 'change', 'detection', ],
-    # )
+    if not cfg.DEBUG:
+        wandb.init(
+            name=cfg.NAME,
+            project='urban_change_detection',
+            tags=['run', 'change', 'detection', ],
+        )
 
     torch.manual_seed(cfg.SEED)
     np.random.seed(cfg.SEED)
