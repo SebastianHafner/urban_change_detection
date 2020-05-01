@@ -1,7 +1,26 @@
 import torchvision.transforms.functional as TF
+from torchvision import transforms
 import numpy as np
 import torch
-from scipy import ndimage
+
+
+def compose_transformations(cfg):
+    transformations = []
+
+    if cfg.AUGMENTATION.CROP_TYPE == 'uniform':
+        transformations.append(UniformCrop(crop_size=cfg.AUGMENTATION.CROP_SIZE))
+    elif cfg.AUGMENTATION.CROP_TYPE == 'importance':
+        transformations.append(ImportanceRandomCrop(crop_size=cfg.AUGMENTATION.CROP_SIZE))
+
+    if cfg.AUGMENTATION.RANDOM_FLIP:
+        transformations.append(RandomFlip())
+
+    if cfg.AUGMENTATION.RANDOM_ROTATE:
+        transformations.append(RandomRotate())
+
+    transformations.append(Numpy2Torch())
+
+    return transforms.Compose(transformations)
 
 
 class Numpy2Torch(object):
@@ -11,6 +30,35 @@ class Numpy2Torch(object):
         img2_tensor = TF.to_tensor(img2)
         label_tensor = TF.to_tensor(label)
         return img1_tensor, img2_tensor, label_tensor
+
+
+class RandomFlip(object):
+    def __call__(self, sample):
+        img1, img2, label = sample
+        h_flip = np.random.choice([True, False])
+        v_flip = np.random.choice([True, False])
+
+        if h_flip:
+            img1 = np.flip(img1, axis=1).copy()
+            img2 = np.flip(img2, axis=1).copy()
+            label = np.flip(label, axis=1).copy()
+
+        if v_flip:
+            img1 = np.flip(img1, axis=0).copy()
+            img2 = np.flip(img2, axis=0).copy()
+            label = np.flip(label, axis=0).copy()
+
+        return img1, img2, label
+
+
+class RandomRotate(object):
+    def __call__(self, args):
+        img1, img2, label = args
+        k = np.random.randint(1, 4)  # number of 90 degree rotations
+        img1 = np.rot90(img1, k, axes=(0, 1)).copy()
+        img2 = np.rot90(img2, k, axes=(0, 1)).copy()
+        label = np.rot90(label, k, axes=(0, 1)).copy()
+        return img1, img2, label
 
 
 # Performs uniform cropping on images
@@ -52,31 +100,3 @@ class ImportanceRandomCrop(UniformCrop):
 
         return img1, img2, label
 
-
-class RandomFlip(object):
-    def __call__(self, sample):
-        img1, img2, label = sample
-        h_flip = np.random.choice([True, False])
-        v_flip = np.random.choice([True, False])
-
-        if h_flip:
-            img1 = np.flip(img1, axis=1)
-            img2 = np.flip(img2, axis=1)
-            label = np.flip(label, axis=1)
-
-        if v_flip:
-            img1 = np.flip(img1, axis=0)
-            img2 = np.flip(img2, axis=0)
-            label = np.flip(label, axis=0)
-
-        return img1, img2, label
-
-
-class RandomRotate(object):
-    def __call__(self, sample):
-        img1, img2, label = sample
-        rotation = np.random.randint(0, 360)
-        img1 = ndimage.rotate(img1, rotation, reshape=False).copy()
-        img2 = ndimage.rotate(img2, rotation, reshape=False).copy()
-        label = ndimage.rotate(label, rotation, reshape=False).copy()
-        return img1, img2, label
