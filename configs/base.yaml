@@ -6,10 +6,9 @@ MODEL:
   TYPE: 'unet' # should support unet, unet_lstm, siammese_conc, siamese_diff,
   TOPOLOGY: [64, 128, 256, 512,]
   OUT_CHANNELS: 1
-  IN_CHANNELS: 2
+  IN_CHANNELS: 12
   LOSS_TYPE: 'FrankensteinLoss'
-  NEGATIVE_WEIGHT: 0.2
-  POSITIVE_WEIGHT: 0.8
+  POSITIVE_WEIGHT: 0.9
 
 DATALOADER:
   NUM_WORKER: 8
@@ -34,10 +33,10 @@ OUTPUT_BASE_DIR: '/storage/shafner/urban_change_detection/run_logs/'
 TRAINER:
   LR: 1e-5
   BATCH_SIZE: 4
-  EPOCHS: 400
+  EPOCHS: 600
 
 AUGMENTATION:
-  CROP_TYPE: 'importance' # uniform or importance
+  CROP_TYPE: 'uniform' # uniform or importance
   CROP_SIZE: 32
   RANDOM_FLIP: True
   RANDOM_ROTATE: True

@@ -19,8 +19,6 @@ class UNet(nn.Module):
         first_chan = cfg.MODEL.TOPOLOGY[0]
         self.inc = InConv(n_channels, first_chan, DoubleConv)
         self.outc = OutConv(first_chan, n_classes)
-        self.multiscale_context_enabled = False
-        self.multiscale_context_type = False
 
         # Variable scale
         down_topo = cfg.MODEL.TOPOLOGY

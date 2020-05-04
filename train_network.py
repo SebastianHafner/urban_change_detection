@@ -50,9 +50,8 @@ def train(net, cfg):
     if cfg.MODEL.LOSS_TYPE == 'BCEWithLogitsLoss':
         criterion = torch.nn.BCEWithLogitsLoss()
     elif cfg.MODEL.LOSS_TYPE == 'WeightedBCEWithLogitsLoss':
-        balance_weight = [cfg.MODEL.NEGATIVE_WEIGHT, cfg.MODEL.POSITIVE_WEIGHT]
-        balance_weight = torch.tensor(balance_weight).float().to(device)
-        criterion = torch.nn.BCEWithLogitsLoss(weight=balance_weight)
+        positive_weight = torch.tensor([cfg.MODEL.POSITIVE_WEIGHT]).float().to(device)
+        criterion = torch.nn.BCEWithLogitsLoss(pos_weight=positive_weight)
     elif cfg.MODEL.LOSS_TYPE == 'SoftDiceLoss':
         criterion = lf.soft_dice_loss
     elif cfg.MODEL.LOSS_TYPE == 'SoftDiceBalancedLoss':
@@ -65,6 +64,9 @@ def train(net, cfg):
         criterion = lambda pred, gts: 2 * F.binary_cross_entropy_with_logits(pred, gts) + lf.soft_dice_loss(pred, gts)
     elif cfg.MODEL.LOSS_TYPE == 'FrankensteinLoss':
         criterion = lambda pred, gts: F.binary_cross_entropy_with_logits(pred, gts) + lf.jaccard_like_balanced_loss(pred, gts)
+    elif cfg.MODEL.LOSS_TYPE == 'WeightedFrankensteinLoss':
+        positive_weight = torch.tensor([cfg.MODEL.POSITIVE_WEIGHT]).float().to(device)
+        criterion = lambda pred, gts: F.binary_cross_entropy_with_logits(pred, gts, pos_weight=positive_weight) + 5 * lf.jaccard_like_balanced_loss(pred, gts)
     else:
         criterion = lf.soft_dice_loss
 
@@ -187,7 +189,11 @@ if __name__ == '__main__':
     cfg = setup(args)
 
     # TODO: load network from config
-    net = daudtetal2018.UNet(12, 1)
+    if cfg.MODEL.TYPE == 'daudt_unet':
+        net = daudtetal2018.UNet(12, 1)
+    else:
+        net = ours.UNet(cfg)
+
 
     if not cfg.DEBUG:
         wandb.init(

@@ -1,11 +1,12 @@
-_BASE_: "base.yaml"
+_BASE_: "debug.yaml"
 
 MODEL:
   TYPE: 'unet' # should support unet, unet_lstm, siammese_conc, siamese_diff,
   TOPOLOGY: [64, 128, 256, 512,]
   OUT_CHANNELS: 1
-  IN_CHANNELS: 2
-  LOSS_TYPE: 'FrankensteinLoss'
+  IN_CHANNELS: 12
+  LOSS_TYPE: 'WeightedFrankensteinLoss'
+  POSITIVE_WEIGHT: 0.9
 
 TRAINER:
   LR: 0.0008
