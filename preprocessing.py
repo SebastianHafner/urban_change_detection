@@ -42,17 +42,17 @@ def process_city(img_folder: Path, label_folder: Path, city: str, new_root: Path
     new_parent.mkdir(exist_ok=True)
 
     # image data
-    for pre_post in ['pre', 'post']:
+    for t in [1, 2]:
 
         # get data
-        from_folder = img_folder / city / 'imgs_1_rect' if pre_post == 'pre' else img_folder / city / 'imgs_2_rect'
+        from_folder = img_folder / city / f'imgs_{t}_rect'
         img = combine_bands(from_folder)
 
         # save data
         to_folder = new_parent / 'sentinel2'
         to_folder.mkdir(exist_ok=True)
 
-        save_file = to_folder / f'sentinel2_{city}_{pre_post}.npy'
+        save_file = to_folder / f'sentinel2_{city}_t{t}.npy'
         np.save(save_file, img)
 
     from_label_file = label_folder / city / 'cm' / f'{city}-cm.tif'
@@ -64,18 +64,35 @@ def process_city(img_folder: Path, label_folder: Path, city: str, new_root: Path
     np.save(to_label_file, label)
 
 
+def add_sentinel1(s1_folder: Path, label_folder: Path, city: str, new_root: Path):
+
+    label_file = label_folder / city / 'cm' / f'{city}-cm.tif'
+    label = tifffile.imread(str(label_file))
+    h, w = label.shape
+
+    for t in [1, 2]:
+        s1_file = s1_folder / f'sentinel1_{city}_t{t}.tif'
+        img = tifffile.imread(str(s1_file))
+
+        img = cv2.resize(img, (w, h), interpolation=cv2.INTER_CUBIC)
+        img = img[:, :, None]
+
+        # save data
+        to_folder = new_root / city / 'sentinel1'
+        to_folder.mkdir(exist_ok=True)
+
+        save_file = to_folder / f'sentinel1_{city}_t{t}.npy'
+        np.save(save_file, img)
+
+
+
 if __name__ == '__main__':
     # assume unchanged OSCD dataset
-    # IMG_FOLDER = Path('C:/Users/hafne/urban_change_detection/data/Onera/images/')
-    # IMG_FOLDER = Path('C:/Users/shafner/urban_change_detection/OSCD_dataset/images/')
     IMG_FOLDER = Path('/storage/shafner/urban_change_detection/OSCD_dataset/images/')
-
-    # LABEL_FOLDER = Path('C:/Users/hafne/urban_change_detection/data/Onera/labels/')
-    # LABEL_FOLDER = Path('C:/Users/shafner/urban_change_detection/OSCD_dataset/labels/')
     LABEL_FOLDER = Path('/storage/shafner/urban_change_detection/OSCD_dataset/labels/')
-
-    # NEW_ROOT = Path('C:/Users/hafne/urban_change_detection/data/Onera/preprocessed/')
     NEW_ROOT = Path('/storage/shafner/urban_change_detection/OSCD_dataset/preprocessed')
+    S1_FOLDER = Path('/storage/shafner/urban_change_detection/OSCD_dataset/sentinel1')
+
 
     train_cities = ['aguasclaras', 'bercy', 'bordeaux', 'nantes', 'paris', 'rennes', 'saclay_e', 'abudhabi',
                     'cupertino', 'pisa', 'beihai', 'hongkong', 'beirut', 'mumbai']
@@ -85,3 +102,5 @@ if __name__ == '__main__':
 
     for city in cities:
         process_city(IMG_FOLDER, LABEL_FOLDER, city, NEW_ROOT)
+        if city != 'mumbai':
+            add_sentinel1(S1_FOLDER, LABEL_FOLDER, city, NEW_ROOT)

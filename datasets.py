@@ -27,7 +27,7 @@ class OSCDDataset(torch.utils.data.Dataset):
         self.mode = cfg.DATASET.MODE
 
         # creating boolean feature vector to subset sentinel 1 and sentinel 2 bands
-        available_features_sentinel1 = ['VV', 'VH']
+        available_features_sentinel1 = ['VV']
         selected_features_sentinel1 = cfg.DATASET.SENTINEL1.BANDS
         self.s1_feature_selection = self._get_feature_selection(available_features_sentinel1,
                                                                 selected_features_sentinel1)
@@ -40,16 +40,16 @@ class OSCDDataset(torch.utils.data.Dataset):
 
         city = self.cities[index]
 
-        pre_img = self._get_sentinel_data(city, 'pre')
-        post_img = self._get_sentinel_data(city, 'post')
+        t1_img = self._get_sentinel_data(city, 't1')
+        t2_img = self._get_sentinel_data(city, 't2')
 
         label = self._get_label_data(city)
         label = label[:, :, np.newaxis]
 
-        pre_img, post_img, label = self.transform((pre_img, post_img, label))
+        t1_img, t2_img, label = self.transform((t1_img, t2_img, label))
         sample = {
-            'pre_img': pre_img,
-            'post_img': post_img,
+            't1_img': t1_img,
+            't2_img': t2_img,
             'label': label,
             'city': city
         }
@@ -58,11 +58,17 @@ class OSCDDataset(torch.utils.data.Dataset):
 
     def _get_sentinel_data(self, city, t):
 
-        s2_dir = self.root_dir / city / 'sentinel2'
+        s2_file = self.root_dir / city / 'sentinel2' / f'sentinel2_{city}_{t}.npy'
+        s1_file = self.root_dir / city / 'sentinel1' / f'sentinel1_{city}_{t}.npy'
 
-        s2_file = s2_dir / f'sentinel2_{city}_{t}.npy'
-        img = np.load(s2_file)
-
+        if self.cfg.DATASET.MODE == 'optical':
+            img = np.load(s2_file)
+        elif self.cfg.DATASET.MODE == 'radar':
+            img = np.load(s1_file)
+        else:  # fusion
+            s1_img = np.load(s1_file)
+            s2_img = np.load(s2_file)
+            img = np.concatenate((s1_img, s2_img), axis=2)
         # TODO: subset according to band selection
 
         return img.astype(np.float32)
