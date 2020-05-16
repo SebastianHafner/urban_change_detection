@@ -1,7 +1,9 @@
-_BASE_: "debug.yaml"
+_BASE_: "base.yaml"
+
+THRESH: 0.96
 
 MODEL:
-  TYPE: 'unet' # should support unet, unet_lstm, siammese_conc, siamese_diff,
+  TYPE: 'our_unet' # should support unet, unet_lstm, siammese_conc, siamese_diff,
   TOPOLOGY: [64, 128, 256, 512,]
   OUT_CHANNELS: 1
   IN_CHANNELS: 12

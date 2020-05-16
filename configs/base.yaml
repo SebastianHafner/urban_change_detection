@@ -1,13 +1,15 @@
 SEED: 7
+THRESH: 0.0
 DEBUG: False
-SAVE_MODEL: False
+SAVE_MODEL: True
+
 
 MODEL:
-  TYPE: 'unet' # should support unet, unet_lstm, siammese_conc, siamese_diff,
+  TYPE: 'our_unet' # should support unet, unet_lstm, siammese_conc, siamese_diff,
   TOPOLOGY: [64, 128, 256, 512,]
   OUT_CHANNELS: 1
   IN_CHANNELS: 12
-  LOSS_TYPE: 'FrankensteinLoss'
+  LOSS_TYPE: 'ComboLoss'
   POSITIVE_WEIGHT: 0.9
 
 DATALOADER:
@@ -36,7 +38,7 @@ TRAINER:
   EPOCHS: 600
 
 AUGMENTATION:
-  CROP_TYPE: 'uniform' # uniform or importance
+  CROP_TYPE: 'importance' # uniform or importance
   CROP_SIZE: 32
   RANDOM_FLIP: True
   RANDOM_ROTATE: True
