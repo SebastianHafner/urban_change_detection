@@ -113,7 +113,7 @@ def train(net, cfg):
 
             global_step += 1
 
-        if epoch % 2 == 0:
+        if epoch % cfg.LOGGING == 0:
             # evaluate model after every epoch
             print(f'epoch {epoch} / {cfg.TRAINER.EPOCHS}')
             # print(f'loss {loss_tracker:.5f}')

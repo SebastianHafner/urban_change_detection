@@ -11,7 +11,7 @@ def get_band(file: Path) -> str:
 
 def combine_bands(folder: Path) -> tuple:
 
-    bands = ['B02', 'B03', 'B04', 'B08', 'B11', 'B12']
+    bands = ['B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08', 'B8A', 'B09', 'B10', 'B11', 'B12']
     n_bands = len(bands)
 
     # using blue band as reference (10 m) to create img

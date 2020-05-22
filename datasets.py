@@ -31,7 +31,8 @@ class OSCDDataset(torch.utils.data.Dataset):
         selected_features_sentinel1 = cfg.DATASET.SENTINEL1.BANDS
         self.s1_feature_selection = self._get_feature_selection(available_features_sentinel1,
                                                                 selected_features_sentinel1)
-        available_features_sentinel2 = ['B2', 'B3', 'B4', 'B8', 'B11', 'B12']
+        available_features_sentinel2 = ['B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08', 'B8A', 'B09', 'B10',
+                                        'B11', 'B12']
         selected_features_sentinel2 = cfg.DATASET.SENTINEL2.BANDS
         self.s2_feature_selection = self._get_feature_selection(available_features_sentinel2,
                                                                 selected_features_sentinel2)
