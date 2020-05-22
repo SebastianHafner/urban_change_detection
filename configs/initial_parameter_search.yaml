@@ -1,21 +1,6 @@
 _BASE_: "base.yaml"
 
-THRESH: 0.96
-
-MODEL:
-  TYPE: 'our_unet' # should support unet, unet_lstm, siammese_conc, siamese_diff,
-  TOPOLOGY: [64, 128, 256, 512,]
-  OUT_CHANNELS: 1
-  IN_CHANNELS: 12
-  LOSS_TYPE: 'WeightedFrankensteinLoss'
-  POSITIVE_WEIGHT: 0.9
+THRESH: 0.0
 
 TRAINER:
-  LR: 0.0008
-  BATCH_SIZE: 4
-
-AUGMENTATION:
-  CROP_TYPE: 'importance' # uniform or importance
-  CROP_SIZE: 32
-  RANDOM_FLIP: True
-  RANDOM_ROTATE: True
+  BATCH_SIZE: 14
