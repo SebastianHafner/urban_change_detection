@@ -2,7 +2,7 @@ SEED: 7
 THRESH: 0.0
 DEBUG: False
 SAVE_MODEL: True
-LOGGING: 2
+LOGGING: 1
 
 
 MODEL:
@@ -36,7 +36,7 @@ OUTPUT_BASE_DIR: '/storage/shafner/urban_change_detection/run_logs/'
 TRAINER:
   LR: 1e-4
   BATCH_SIZE: 4
-  EPOCHS: 600
+  EPOCHS: 1500
 
 AUGMENTATION:
   CROP_TYPE: 'importance' # uniform or importance
