@@ -115,7 +115,9 @@ def visual_evaluation(root_dir: Path, cfg_file: Path, net_file: Path, dataset: s
             plt.close()
 
 
-def numeric_evaluation(cfg_file: Path, net_file: Path):
+def numeric_evaluation(cfg_file: Path, net_file: Path, subset: bool = False):
+
+    europe = ['montpellier', 'norcia', 'saclay_w', 'valencia', 'milano']
 
     mode = 'cuda' if torch.cuda.is_available() else 'cpu'
     device = torch.device(mode)
@@ -178,6 +180,9 @@ def numeric_evaluation(cfg_file: Path, net_file: Path):
 
         print('summary')
 
+        if subset:
+            pred_results = subset_pred_results(pred_results, europe)
+
         labels = torch.cat(pred_results['label'], dim=0)
         predictions = torch.cat(pred_results['pred'], dim=0)
         predictions_tta = torch.cat(pred_results['tta_pred'], dim=0)
@@ -192,6 +197,17 @@ def numeric_evaluation(cfg_file: Path, net_file: Path):
             f1_tta = eval.f1_score(labels, predictions_tta_ts, dim=0)
             print(f'{f1_tta.item():.3f} ({ts:.1f})')
 
+        for i, city in enumerate(pred_results['city']):
+            f1 = eval.f1_score(pred_results['label'][i], pred_results['pred'][i], dim=0)
+            print(f'{f1.item():.3f} {city}')
+
+
+def subset_pred_results(pred_results, cities):
+    indices = [i for i, city in enumerate(pred_results['city']) if city in cities]
+    for key in pred_results.keys():
+        sublist_key = [pred_results[key][i] for i in indices]
+        pred_results[key] = sublist_key
+    return pred_results
 
 if __name__ == '__main__':
 
@@ -200,11 +216,11 @@ if __name__ == '__main__':
     STORAGE_DIR = Path('/storage/shafner/urban_change_detection')
 
     dataset = 'OSCD_dataset'
-    cfg = 'baseline_lowlr'
+    cfg = 'baseline_europe'
 
     cfg_file = CFG_DIR / f'{cfg}.yaml'
     net_file = NET_DIR / cfg / 'best_net.pkl'
 
     # visual_evaluation(STORAGE_DIR, cfg_file, net_file, 'test', 100, label_pred_only=True)
-    numeric_evaluation(cfg_file, net_file)
+    numeric_evaluation(cfg_file, net_file, subset=True)
 

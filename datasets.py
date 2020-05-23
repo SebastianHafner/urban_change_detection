@@ -63,14 +63,13 @@ class OSCDDataset(torch.utils.data.Dataset):
         s1_file = self.root_dir / city / 'sentinel1' / f'sentinel1_{city}_{t}.npy'
 
         if self.cfg.DATASET.MODE == 'optical':
-            img = np.load(s2_file)
+            img = np.load(s2_file)[:, :, self.s2_feature_selection]
         elif self.cfg.DATASET.MODE == 'radar':
-            img = np.load(s1_file)
+            img = np.load(s1_file)[:, :, self.s1_feature_selection]
         else:  # fusion
-            s1_img = np.load(s1_file)
-            s2_img = np.load(s2_file)
+            s1_img = np.load(s1_file)[:, :, self.s1_feature_selection]
+            s2_img = np.load(s2_file)[:, :, self.s2_feature_selection]
             img = np.concatenate((s1_img, s2_img), axis=2)
-        # TODO: subset according to band selection
 
         return img.astype(np.float32)
 
