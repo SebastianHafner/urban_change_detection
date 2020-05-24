@@ -8,7 +8,7 @@ MODEL:
   TOPOLOGY: [64, 128, 256, 512,]
   OUT_CHANNELS: 1
   IN_CHANNELS: 26
-  LOSS_TYPE: 'ComboLoss'
+  LOSS_TYPE: 'JaccardLikeLoss'
   POSITIVE_WEIGHT: 0.9
 DATALOADER:
   NUM_WORKER: 8
@@ -28,9 +28,9 @@ DATASET:
         'chongqing']
 OUTPUT_BASE_DIR: '/storage/shafner/urban_change_detection/run_logs/'
 TRAINER:
-  LR: 1e-4
-  BATCH_SIZE: 4
+  LR: 5e-5
   EPOCHS: 1500
+  BATCH_SIZE: 12
 AUGMENTATION:
   OVERSAMPLING: 'none' # none, pixel or change
   CROP_TYPE: 'importance' # uniform or importance

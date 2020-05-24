@@ -1,6 +1,6 @@
 _BASE_: "base.yaml"
 
-THRESH: 0.0
+THRESH: 0.69
 
 MODEL:
   LOSS_TYPE: 'JaccardLikeLoss'
