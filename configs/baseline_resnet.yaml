@@ -1,0 +1,9 @@
+_BASE_: "new_base.yaml"
+
+DEBUG: False
+SAVE_MODEL: True
+
+THRESH: 0.0
+
+MODEL:
+  TYPE: 'unet_resnet34'

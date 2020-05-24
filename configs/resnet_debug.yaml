@@ -1,0 +1,23 @@
+_BASE_: "new_base.yaml"
+
+DEBUG: True
+SAVE_MODEL: False
+
+THRESH: 0.0
+
+MODEL:
+  TYPE: 'unet_resnet34'
+  OUT_CHANNELS: 1
+  IN_CHANNELS: 6
+
+DATASET:
+  PATH: '/storage/shafner/urban_change_detection/OSCD_dataset/preprocessed/'
+  MODE: 'optical' # optical, radar or fusion
+  SENTINEL2:
+    BANDS: ['B02', 'B03', 'B04']
+    TEMPORAL_MODE: 'bi-temporal'
+
+TRAINER:
+  LR: 5e-5
+  EPOCHS: 10
+  BATCH_SIZE: 12

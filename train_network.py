@@ -24,6 +24,7 @@ import datasets
 # networks from papers and ours
 from networks import daudtetal2018
 from networks import ours
+import segmentation_models_pytorch as smp
 
 # logging
 import wandb
@@ -105,7 +106,11 @@ def train(net, cfg):
 
             optimizer.zero_grad()
 
-            output = net(t1_img, t2_img)
+            if cfg.MODEL.TYPE == 'unet_resnet34':
+                img = torch.cat((t1_img, t2_img), dim=1)
+                output = net(img)
+            else:
+                output = net(t1_img, t2_img)
 
             loss = criterion(output, label)
             loss_tracker += loss.item()
@@ -143,62 +148,6 @@ def train(net, cfg):
                     torch.save(net.state_dict(), model_file)
 
 
-def model_eval(net, cfg, device, run_type, epoch, step):
-
-    def evaluate(y_true: torch.Tensor, y_pred: torch.Tensor):
-        y_true = torch.flatten(y_true)
-        y_pred = torch.flatten(y_pred)
-        precision = eval.precision(y_true, y_pred, dim=0)
-        recall = eval.recall(y_true, y_pred, dim=0)
-        f1 = eval.f1_score(y_true, y_pred, dim=0)
-
-        precision = precision.item()
-        recall = recall.item()
-        f1 = f1.item()
-
-        return f1, precision, recall
-
-    dataset = datasets.OSCDDataset(cfg, run_type, no_augmentation=True)
-    dataloader_kwargs = {
-        'batch_size': 1,
-        'num_workers': 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER,
-        'shuffle':cfg.DATALOADER.SHUFFLE,
-        'pin_memory': True,
-    }
-    dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
-
-    y_true_set, y_pred_set = [], []
-    with torch.no_grad():
-        net.eval()
-        for step, batch in enumerate(dataloader):
-            pre_img = batch['pre_img'].to(device)
-            post_img = batch['post_img'].to(device)
-            y_true = batch['label'].to(device)
-
-            y_pred = net(pre_img, post_img)
-            y_pred = torch.sigmoid(y_pred)
-            threshold = 0.5
-            y_pred = torch.gt(y_pred, threshold).float()
-
-            y_true_set.append(y_true.flatten())
-            y_pred_set.append(y_pred.flatten())
-
-    y_true_set = torch.cat(y_true_set)
-    y_pred_set = torch.cat(y_pred_set)
-
-    f1, precision, recall = evaluate(y_true_set, y_pred_set)
-    print(f'{run_type} f1: {f1:.3f}; precision: {precision:.3f}; recall: {recall:.3f}')
-
-    if not cfg.DEBUG:
-        wandb.log({
-            f'{run_type} f1': f1,
-            f'{run_type} precision': precision,
-            f'{run_type} recall': recall,
-            'step': step,
-            'epoch': epoch,
-        })
-
-
 def model_eval_multithreshold(net, cfg, device, run_type, epoch, step):
 
     f1_thresholds = torch.linspace(0, 1, 100).to(device)
@@ -222,7 +171,17 @@ def model_eval_multithreshold(net, cfg, device, run_type, epoch, step):
             t1_img = batch['t1_img'].to(device)
             t2_img = batch['t2_img'].to(device)
             y_true = batch['label'].to(device)
-            y_pred = net(t1_img, t2_img)
+
+            if cfg.MODEL.TYPE == 'unet_resnet34':
+                img = torch.cat((t1_img, t2_img), dim=1)
+                if img.shape[2] > img.shape[3]:
+                    img = img[:, :, :img.shape[3], :]
+                else:
+                    img = img[:, :, :, :img.shape[2]]
+                y_pred = net(img)
+            else:
+                y_pred = net(t1_img, t2_img)
+
             y_pred = torch.sigmoid(y_pred)
 
             y_true = y_true.detach()
@@ -270,6 +229,8 @@ if __name__ == '__main__':
         net = daudtetal2018.SiameseUNetConc(6, 1)
     elif cfg.MODEL.TYPE == 'our_unet':
         net = ours.UNet(cfg)
+    elif cfg.MODEL.TYPE == 'unet_resnet34':
+        net = smp.Unet('resnet34', in_channels=cfg.MODEL.IN_CHANNELS, classes=1, encoder_weights=None, activation=None)
     else:
         net = ours.UNet(cfg)
 
