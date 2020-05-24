@@ -216,11 +216,11 @@ if __name__ == '__main__':
     STORAGE_DIR = Path('/storage/shafner/urban_change_detection')
 
     dataset = 'OSCD_dataset'
-    cfg = 'baseline_europe'
+    cfg = 'baseline_verylargeb'
 
     cfg_file = CFG_DIR / f'{cfg}.yaml'
     net_file = NET_DIR / cfg / 'best_net.pkl'
 
-    # visual_evaluation(STORAGE_DIR, cfg_file, net_file, 'test', 100, label_pred_only=True)
-    numeric_evaluation(cfg_file, net_file, subset=True)
+    visual_evaluation(STORAGE_DIR, cfg_file, net_file, 'test', 100, label_pred_only=False)
+    numeric_evaluation(cfg_file, net_file, subset=False)
 

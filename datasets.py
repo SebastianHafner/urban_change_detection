@@ -1,4 +1,5 @@
 import torch
+from torch.utils import data as torch_data
 from torchvision import transforms
 from pathlib import Path
 import numpy as np
@@ -87,3 +88,12 @@ class OSCDDataset(torch.utils.data.Dataset):
 
     def __len__(self):
         return self.length
+
+    def sampler(self):
+        if self.cfg.AUGMENTATION.OVERSAMPLING == 'pixel':
+            sampling_weights = np.array([float(self._get_label_data(city).size) for city in self.cities])
+        if self.cfg.AUGMENTATION.OVERSAMPLING == 'change':
+            sampling_weights = np.array([float(np.sum(self._get_label_data(city))) for city in self.cities])
+        sampler = torch_data.WeightedRandomSampler(weights=sampling_weights, num_samples=self.length,
+                                                   replacement=True)
+        return sampler
