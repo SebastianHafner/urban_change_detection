@@ -5,6 +5,33 @@ from pathlib import Path
 import numpy as np
 import augmentations as aug
 
+ORBITS = {
+    'aguasclaras': [24],
+    'bercy': [59, 8, 110],
+    'bordeaux': [30, 8, 81],
+    'nantes': [30, 81],
+    'paris': [59, 8, 110],
+    'rennes': [30, 81],
+    'saclay_e': [59, 8],
+    'abudhabi': [130],
+    'cupertino': [35, 115, 42],
+    'pisa': [15, 168],
+    'beihai': [157],
+    'hongkong': [11, 113],
+    'beirut': [14, 87],
+    'mumbai': [34],
+    'brasilia': [24],
+    'montpellier': [59, 37],
+    'norcia': [117, 44, 22, 95],
+    'rio': [155],
+    'saclay_w': [59, 8, 110],
+    'valencia': [30, 103, 8, 110],
+    'dubai': [130, 166],
+    'lasvegas': [166, 173],
+    'milano': [66, 168],
+    'chongqing': [55, 164]
+}
+
 
 class OSCDDataset(torch.utils.data.Dataset):
     def __init__(self, cfg, dataset: str, no_augmentation: bool = False):
@@ -42,8 +69,11 @@ class OSCDDataset(torch.utils.data.Dataset):
 
         city = self.cities[index]
 
-        t1_img = self._get_sentinel_data(city, 't1')
-        t2_img = self._get_sentinel_data(city, 't2')
+        # randomly choosing an orbit for sentinel1
+        orbit = np.random.choice(ORBITS[city])
+
+        t1_img = self._get_sentinel_data(city, orbit, 't1')
+        t2_img = self._get_sentinel_data(city, orbit, 't2')
 
         label = self._get_label_data(city)
         label = label[:, :, np.newaxis]
@@ -58,10 +88,10 @@ class OSCDDataset(torch.utils.data.Dataset):
 
         return sample
 
-    def _get_sentinel_data(self, city, t):
+    def _get_sentinel_data(self, city, s1_orbit, t):
 
         s2_file = self.root_dir / city / 'sentinel2' / f'sentinel2_{city}_{t}.npy'
-        s1_file = self.root_dir / city / 'sentinel1' / f'sentinel1_{city}_{t}.npy'
+        s1_file = self.root_dir / city / 'sentinel1' / f'sentinel1_{city}_{s1_orbit}_{t}.npy'
 
         if self.cfg.DATASET.MODE == 'optical':
             img = np.load(s2_file)[:, :, self.s2_feature_selection]

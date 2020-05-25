@@ -1,19 +1,12 @@
-_BASE_: "base.yaml"
+_BASE_: "new_base.yaml"
 
-THRESH: 0.85
+THRESH: 0.0
 
 MODEL:
   IN_CHANNELS: 2
-
-TRAINER:
-  LR: 0.000005
-  BATCH_SIZE: 4
-  EPOCHS: 600
 
 DATASET:
   MODE: 'radar' # optical, radar or fusion
   SENTINEL1:
     BANDS: ['VV']
     TEMPORAL_MODE: 'bi-temporal'
-  TRAIN: ['aguasclaras', 'bercy', 'bordeaux', 'nantes', 'paris', 'rennes', 'saclay_e', 'abudhabi', 'cupertino',
-          'pisa', 'beihai', 'hongkong', 'beirut']

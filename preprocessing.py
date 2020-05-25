@@ -64,14 +64,14 @@ def process_city(img_folder: Path, label_folder: Path, city: str, new_root: Path
     np.save(to_label_file, label)
 
 
-def add_sentinel1(s1_folder: Path, label_folder: Path, city: str, new_root: Path):
+def add_sentinel1(s1_folder: Path, label_folder: Path, city: str, orbit: int, new_root: Path):
 
     label_file = label_folder / city / 'cm' / f'{city}-cm.tif'
     label = tifffile.imread(str(label_file))
     h, w = label.shape
 
     for t in [1, 2]:
-        s1_file = s1_folder / f'sentinel1_{city}_t{t}.tif'
+        s1_file = s1_folder / f'sentinel1_{city}_{orbit}_t{t}.tif'
         img = tifffile.imread(str(s1_file))
 
         img = cv2.resize(img, (w, h), interpolation=cv2.INTER_CUBIC)
@@ -81,7 +81,7 @@ def add_sentinel1(s1_folder: Path, label_folder: Path, city: str, new_root: Path
         to_folder = new_root / city / 'sentinel1'
         to_folder.mkdir(exist_ok=True)
 
-        save_file = to_folder / f'sentinel1_{city}_t{t}.npy'
+        save_file = to_folder / f'sentinel1_{city}_{orbit}_t{t}.npy'
         np.save(save_file, img)
 
 
@@ -93,14 +93,39 @@ if __name__ == '__main__':
     NEW_ROOT = Path('/storage/shafner/urban_change_detection/OSCD_dataset/preprocessed')
     S1_FOLDER = Path('/storage/shafner/urban_change_detection/OSCD_dataset/sentinel1')
 
+    CITIES = ['aguasclaras', 'bercy', 'bordeaux', 'nantes', 'paris', 'rennes', 'saclay_e', 'abudhabi', 'cupertino',
+              'pisa', 'beihai', 'hongkong', 'beirut', 'mumbai', 'brasilia', 'montpellier', 'norcia', 'rio', 'saclay_w',
+              'valencia', 'dubai', 'lasvegas', 'milano', 'chongqing']
 
-    train_cities = ['aguasclaras', 'bercy', 'bordeaux', 'nantes', 'paris', 'rennes', 'saclay_e', 'abudhabi',
-                    'cupertino', 'pisa', 'beihai', 'hongkong', 'beirut', 'mumbai']
-    test_cities = ['brasilia', 'montpellier', 'norcia', 'rio', 'saclay_w', 'valencia', 'dubai', 'lasvegas', 'milano',
-                   'chongqing']
-    cities = train_cities + test_cities
+    ORBITS = {
+        'aguasclaras': [24],
+        'bercy': [59, 8, 110],
+        'bordeaux': [30, 8, 81],
+        'nantes': [30, 81],
+        'paris': [59, 8, 110],
+        'rennes': [30, 81],
+        'saclay_e': [59, 8],
+        'abudhabi': [130],
+        'cupertino': [35, 115, 42],
+        'pisa': [15, 168],
+        'beihai': [157],
+        'hongkong': [11, 113],
+        'beirut': [14, 87],
+        'mumbai': [34],
+        'brasilia': [24],
+        'montpellier': [59, 37],
+        'norcia': [117, 44, 22, 95],
+        'rio': [155],
+        'saclay_w': [59, 8, 110],
+        'valencia': [30, 103, 8, 110],
+        'dubai': [130, 166],
+        'lasvegas': [166, 173],
+        'milano': [66, 168],
+        'chongqing': [55, 164]
+    }
 
-    for city in cities:
-        process_city(IMG_FOLDER, LABEL_FOLDER, city, NEW_ROOT)
-        if city != 'mumbai':
-            add_sentinel1(S1_FOLDER, LABEL_FOLDER, city, NEW_ROOT)
+    for city in CITIES:
+        # process_city(IMG_FOLDER, LABEL_FOLDER, city, NEW_ROOT)
+        orbits = ORBITS[city]
+        for orbit in orbits:
+            add_sentinel1(S1_FOLDER, LABEL_FOLDER, city, orbit, NEW_ROOT)
