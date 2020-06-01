@@ -26,11 +26,13 @@ DATASET:
           'pisa', 'beihai', 'hongkong', 'beirut', 'mumbai']
   TEST: ['brasilia', 'montpellier', 'norcia', 'rio', 'saclay_w', 'valencia', 'dubai', 'lasvegas', 'milano',
         'chongqing']
+  TRAIN_MULTIPLIER: 1
 OUTPUT_BASE_DIR: '/storage/shafner/urban_change_detection/run_logs/'
 TRAINER:
   LR: 5e-5
   EPOCHS: 1500
   BATCH_SIZE: 12
+  OPTIMIZER: 'adam' # adam or sdg
 AUGMENTATION:
   OVERSAMPLING: 'none' # none, pixel or change
   CROP_TYPE: 'importance' # uniform or importance
