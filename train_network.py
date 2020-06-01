@@ -45,7 +45,10 @@ def train(net, cfg):
 
     net.to(device)
 
-    optimizer = torch.optim.Adam(net.parameters(), lr=cfg.TRAINER.LR, weight_decay=0.0005)
+    if cfg.TRAINER.OPTIMIZER == 'adam':
+        optimizer = torch.optim.Adam(net.parameters(), lr=cfg.TRAINER.LR, weight_decay=0.0005)
+    else:
+        optimizer = torch.optim.SGD(net.parameters(), lr=cfg.TRAINER.LR, momentum=0.9)
 
     # loss functions
     if cfg.MODEL.LOSS_TYPE == 'BCEWithLogitsLoss':

@@ -55,9 +55,8 @@ class UNet(nn.Module):
 
         self.up_seq = nn.ModuleDict(up_dict)
 
-    def forward(self, x1, x2):
-
-        x = torch.cat((x1, x2), 1)
+    def forward(self, x1, x2=None):
+        x = x1 if x2 is None else torch.cat((x1, x2), 1)
 
         x1 = self.inc(x)
 

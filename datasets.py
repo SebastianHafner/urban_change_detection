@@ -41,7 +41,8 @@ class OSCDDataset(torch.utils.data.Dataset):
         self.root_dir = Path(cfg.DATASET.PATH)
 
         if dataset == 'train':
-            self.cities = cfg.DATASET.TRAIN
+            multiplier = cfg.DATASET.TRAIN_MULTIPLIER
+            self.cities = multiplier * cfg.DATASET.TRAIN
         else:
             self.cities = cfg.DATASET.TEST
 

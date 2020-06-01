@@ -209,6 +209,7 @@ def subset_pred_results(pred_results, cities):
         pred_results[key] = sublist_key
     return pred_results
 
+
 if __name__ == '__main__':
 
     CFG_DIR = Path.cwd() / 'configs'
