@@ -1,4 +1,3 @@
-# full assembly of the sub-parts to form the complete net
 from collections import OrderedDict
 import torch.nn.functional as F
 import torch
@@ -6,22 +5,57 @@ import torch.nn as nn
 from torch.nn.modules.padding import ReplicationPad2d
 
 
-class UNet(nn.Module):
+class DualStreamUNet(nn.Module):
+
     def __init__(self, cfg):
+        super(DualStreamUNet, self).__init__()
+        assert (cfg.DATASET.MODE == 'fusion')
+        self._cfg = cfg
+        out = cfg.MODEL.OUT_CHANNELS
+        topology = cfg.MODEL.TOPOLOGY
+
+        # sentinel-1 unet stream
+        s1_in = len(cfg.DATASET.SENTINEL1_BANDS) * 2
+        self.s1_stream = UNet(cfg, n_channels=s1_in, n_classes=out, topology=topology, enable_outc=False)
+
+        # sentinel-2 unet stream
+        s2_in = len(cfg.DATASET.SENTINEL2_BANDS) * 2
+        self.s2_stream = UNet(cfg, n_channels=s2_in, n_classes=out, topology=topology, enable_outc=False)
+
+        # out block combining unet outputs
+        out_dim = 2 * topology[0]
+        self.out_conv = OutConv(out_dim, out)
+
+    def forward(self, s1_t1, s1_t2, s2_t1, s2_t2):
+
+        s1_feature = self.s1_stream(s1_t1, s1_t2)
+        s2_feature = self.s2_stream(s2_t1, s2_t2)
+
+        fusion = torch.cat((s1_feature, s2_feature), dim=1)
+
+        out = self.out_conv(fusion)
+
+        return out
+
+
+class UNet(nn.Module):
+    def __init__(self, cfg, n_channels=None, n_classes=None, topology=None, enable_outc=True):
 
         self._cfg = cfg
 
-        n_channels = cfg.MODEL.IN_CHANNELS
-        n_classes = cfg.MODEL.OUT_CHANNELS
+        n_channels = cfg.MODEL.IN_CHANNELS if n_channels is None else n_channels
+        n_classes = cfg.MODEL.OUT_CHANNELS if n_classes is None else n_classes
+        topology = cfg.MODEL.TOPOLOGY if topology is None else topology
 
         super(UNet, self).__init__()
 
-        first_chan = cfg.MODEL.TOPOLOGY[0]
+        first_chan = topology[0]
         self.inc = InConv(n_channels, first_chan, DoubleConv)
+        self.enable_outc = enable_outc
         self.outc = OutConv(first_chan, n_classes)
 
         # Variable scale
-        down_topo = cfg.MODEL.TOPOLOGY
+        down_topo = topology
         down_dict = OrderedDict()
         n_layers = len(down_topo)
         up_topo = [first_chan] # topography upwards
@@ -73,7 +107,7 @@ class UNet(nn.Module):
             x2 = inputs[idx]
             x1 = layer(x1, x2)  # x1 for next up layer
 
-        out = self.outc(x1)
+        out = self.outc(x1) if self.enable_outc else x1
 
         return out
 
@@ -155,132 +189,3 @@ class OutConv(nn.Module):
     def forward(self, x):
         x = self.conv(x)
         return x
-
-
-class TestUNet(nn.Module):
-
-    def __init__(self, input_nbr, label_nbr):
-        super(TestUNet, self).__init__()
-
-        self.input_nbr = input_nbr
-
-        self.conv11 = nn.Conv2d(input_nbr, 16, kernel_size=3, padding=1)
-        self.bn11 = nn.BatchNorm2d(16)
-        self.conv12 = nn.Conv2d(16, 16, kernel_size=3, padding=1)
-        self.bn12 = nn.BatchNorm2d(16)
-
-        self.conv21 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
-        self.bn21 = nn.BatchNorm2d(32)
-        self.conv22 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
-        self.bn22 = nn.BatchNorm2d(32)
-
-        self.conv31 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.bn31 = nn.BatchNorm2d(64)
-        self.conv32 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
-        self.bn32 = nn.BatchNorm2d(64)
-        self.conv33 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
-        self.bn33 = nn.BatchNorm2d(64)
-
-        self.conv41 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
-        self.bn41 = nn.BatchNorm2d(128)
-        self.conv42 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
-        self.bn42 = nn.BatchNorm2d(128)
-        self.conv43 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
-        self.bn43 = nn.BatchNorm2d(128)
-
-        self.upconv4 = nn.ConvTranspose2d(128, 128, kernel_size=3, padding=1, stride=2, output_padding=1)
-
-        self.conv43d = nn.ConvTranspose2d(256, 128, kernel_size=3, padding=1)
-        self.bn43d = nn.BatchNorm2d(128)
-
-        self.conv42d = nn.ConvTranspose2d(128, 128, kernel_size=3, padding=1)
-        self.bn42d = nn.BatchNorm2d(128)
-
-        self.conv41d = nn.ConvTranspose2d(128, 64, kernel_size=3, padding=1)
-        self.bn41d = nn.BatchNorm2d(64)
-
-        self.upconv3 = nn.ConvTranspose2d(64, 64, kernel_size=3, padding=1, stride=2, output_padding=1)
-
-        self.conv33d = nn.ConvTranspose2d(128, 64, kernel_size=3, padding=1)
-        self.bn33d = nn.BatchNorm2d(64)
-
-        self.conv32d = nn.ConvTranspose2d(64, 64, kernel_size=3, padding=1)
-        self.bn32d = nn.BatchNorm2d(64)
-
-        self.conv31d = nn.ConvTranspose2d(64, 32, kernel_size=3, padding=1)
-        self.bn31d = nn.BatchNorm2d(32)
-
-        self.upconv2 = nn.ConvTranspose2d(32, 32, kernel_size=3, padding=1, stride=2, output_padding=1)
-
-        self.conv22d = nn.ConvTranspose2d(64, 32, kernel_size=3, padding=1)
-        self.bn22d = nn.BatchNorm2d(32)
-
-        self.conv21d = nn.ConvTranspose2d(32, 16, kernel_size=3, padding=1)
-        self.bn21d = nn.BatchNorm2d(16)
-
-        self.upconv1 = nn.ConvTranspose2d(16, 16, kernel_size=3, padding=1, stride=2, output_padding=1)
-
-        self.conv12d = nn.ConvTranspose2d(32, 16, kernel_size=3, padding=1)
-        self.bn12d = nn.BatchNorm2d(16)
-
-        self.conv11d = nn.ConvTranspose2d(16, label_nbr, kernel_size=3, padding=1)
-
-    def forward(self, x1, x2):
-        x = torch.cat((x1, x2), 1)
-
-        """Forward method."""
-        # Stage 1
-        x11 = F.relu(self.bn11(self.conv11(x)))
-        x12 = F.relu(self.bn12(self.conv12(x11)))
-        x1p = F.max_pool2d(x12, kernel_size=2, stride=2)
-
-        # Stage 2
-        x21 = F.relu(self.bn21(self.conv21(x1p)))
-        x22 = F.relu(self.bn22(self.conv22(x21)))
-        x2p = F.max_pool2d(x22, kernel_size=2, stride=2)
-
-        # Stage 3
-        x31 = F.relu(self.bn31(self.conv31(x2p)))
-        x32 = F.relu(self.bn32(self.conv32(x31)))
-        x33 = F.relu(self.bn33(self.conv33(x32)))
-        x3p = F.max_pool2d(x33, kernel_size=2, stride=2)
-
-        # Stage 4
-        x41 = F.relu(self.bn41(self.conv41(x3p)))
-        x42 = F.relu(self.bn42(self.conv42(x41)))
-        x43 = F.relu(self.bn43(self.conv43(x42)))
-        x4p = F.max_pool2(x43, kernel_size=2, stride=2)
-
-        # Stage 4d
-        x4d = self.upconv4(x4p)
-        pad4 = ReplicationPad2d((0, x43.size(3) - x4d.size(3), 0, x43.size(2) - x4d.size(2)))
-        x4d = torch.cat((pad4(x4d), x43), 1)
-        x43d = F.relu(self.bn43d(self.conv43d(x4d)))
-        x42d = F.relu(self.bn42d(self.conv42d(x43d)))
-        x41d = F.relu(self.bn41d(self.conv41d(x42d)))
-
-        # Stage 3d
-        x3d = self.upconv3(x41d)
-        pad3 = ReplicationPad2d((0, x33.size(3) - x3d.size(3), 0, x33.size(2) - x3d.size(2)))
-        x3d = torch.cat((pad3(x3d), x33), 1)
-        x33d = F.relu(self.bn33d(self.conv33d(x3d)))
-        x32d = F.relu(self.bn32d(self.conv32d(x33d)))
-        x31d = F.relu(self.bn31d(self.conv31d(x32d)))
-
-        # Stage 2d
-        x2d = self.upconv2(x31d)
-        pad2 = ReplicationPad2d((0, x22.size(3) - x2d.size(3), 0, x22.size(2) - x2d.size(2)))
-        x2d = torch.cat((pad2(x2d), x22), 1)
-        x22d = F.relu(self.bn22d(self.conv22d(x2d)))
-        x21d = F.relu(self.bn21d(self.conv21d(x22d)))
-
-        # Stage 1d
-        x1d = self.upconv1(x21d)
-        pad1 = ReplicationPad2d((0, x12.size(3) - x1d.size(3), 0, x12.size(2) - x1d.size(2)))
-        x1d = torch.cat((pad1(x1d), x12), 1)
-        x12d = F.relu(self.bn12d(self.conv12d(x1d)))
-        x11d = self.conv11d(x12d)
-
-        return x11d
-        # return self.sm(x11d)
-

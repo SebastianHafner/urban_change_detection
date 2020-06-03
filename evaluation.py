@@ -210,6 +210,10 @@ def subset_pred_results(pred_results, cities):
     return pred_results
 
 
+def orbit_comparison(cfg_file, net_file):
+    pass
+
+
 if __name__ == '__main__':
 
     CFG_DIR = Path.cwd() / 'configs'
@@ -217,7 +221,7 @@ if __name__ == '__main__':
     STORAGE_DIR = Path('/storage/shafner/urban_change_detection')
 
     dataset = 'OSCD_dataset'
-    cfg = 'baseline_verylargeb'
+    cfg = 'fusion_dualstream'
 
     cfg_file = CFG_DIR / f'{cfg}.yaml'
     net_file = NET_DIR / cfg / 'best_net.pkl'

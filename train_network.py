@@ -22,8 +22,7 @@ import loss_functions as lf
 import datasets
 
 # networks from papers and ours
-from networks import daudtetal2018
-from networks import ours
+from networks.network_loader import load_network
 
 # logging
 import wandb
@@ -108,7 +107,14 @@ def train(net, cfg):
 
             optimizer.zero_grad()
 
-            output = net(t1_img, t2_img)
+            if cfg.MODEL.TYPE == 'dualstreamunet':
+                n_s1 = len(cfg.DATASET.SENTINEL1_BANDS)
+                n_s2 = len(cfg.DATASET.SENTINEL2_BANDS)
+                s1_t1, s2_t1 = torch.split(t1_img, [n_s1, n_s2], dim=1)
+                s1_t2, s2_t2 = torch.split(t2_img, [n_s1, n_s2], dim=1)
+                output = net(s1_t1, s1_t2, s2_t1, s2_t2)
+            else:
+                output = net(t1_img, t2_img)
 
             loss = criterion(output, label)
             loss_tracker += loss.item()
@@ -146,62 +152,6 @@ def train(net, cfg):
                     torch.save(net.state_dict(), model_file)
 
 
-def model_eval(net, cfg, device, run_type, epoch, step):
-
-    def evaluate(y_true: torch.Tensor, y_pred: torch.Tensor):
-        y_true = torch.flatten(y_true)
-        y_pred = torch.flatten(y_pred)
-        precision = eval.precision(y_true, y_pred, dim=0)
-        recall = eval.recall(y_true, y_pred, dim=0)
-        f1 = eval.f1_score(y_true, y_pred, dim=0)
-
-        precision = precision.item()
-        recall = recall.item()
-        f1 = f1.item()
-
-        return f1, precision, recall
-
-    dataset = datasets.OSCDDataset(cfg, run_type, no_augmentation=True)
-    dataloader_kwargs = {
-        'batch_size': 1,
-        'num_workers': 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER,
-        'shuffle':cfg.DATALOADER.SHUFFLE,
-        'pin_memory': True,
-    }
-    dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
-
-    y_true_set, y_pred_set = [], []
-    with torch.no_grad():
-        net.eval()
-        for step, batch in enumerate(dataloader):
-            pre_img = batch['pre_img'].to(device)
-            post_img = batch['post_img'].to(device)
-            y_true = batch['label'].to(device)
-
-            y_pred = net(pre_img, post_img)
-            y_pred = torch.sigmoid(y_pred)
-            threshold = 0.5
-            y_pred = torch.gt(y_pred, threshold).float()
-
-            y_true_set.append(y_true.flatten())
-            y_pred_set.append(y_pred.flatten())
-
-    y_true_set = torch.cat(y_true_set)
-    y_pred_set = torch.cat(y_pred_set)
-
-    f1, precision, recall = evaluate(y_true_set, y_pred_set)
-    print(f'{run_type} f1: {f1:.3f}; precision: {precision:.3f}; recall: {recall:.3f}')
-
-    if not cfg.DEBUG:
-        wandb.log({
-            f'{run_type} f1': f1,
-            f'{run_type} precision': precision,
-            f'{run_type} recall': recall,
-            'step': step,
-            'epoch': epoch,
-        })
-
-
 def model_eval_multithreshold(net, cfg, device, run_type, epoch, step):
 
     f1_thresholds = torch.linspace(0, 1, 100).to(device)
@@ -225,7 +175,16 @@ def model_eval_multithreshold(net, cfg, device, run_type, epoch, step):
             t1_img = batch['t1_img'].to(device)
             t2_img = batch['t2_img'].to(device)
             y_true = batch['label'].to(device)
-            y_pred = net(t1_img, t2_img)
+
+            if cfg.MODEL.TYPE == 'dualstreamunet':
+                n_s1 = len(cfg.DATASET.SENTINEL1_BANDS)
+                n_s2 = len(cfg.DATASET.SENTINEL2_BANDS)
+                s1_t1, s2_t1 = torch.split(t1_img, [n_s1, n_s2], dim=1)
+                s1_t2, s2_t2 = torch.split(t2_img, [n_s1, n_s2], dim=1)
+                y_pred = net(s1_t1, s1_t2, s2_t1, s2_t2)
+            else:
+                y_pred = net(t1_img, t2_img)
+
             y_pred = torch.sigmoid(y_pred)
 
             y_true = y_true.detach()
@@ -266,17 +225,10 @@ if __name__ == '__main__':
     args = parser.parse_known_args()[0]
     cfg = setup(args)
 
-    # TODO: load network from config
-    if cfg.MODEL.TYPE == 'daudt_unet':
-        net = daudtetal2018.UNet(12, 1)
-    elif cfg.MODEL.TYPE == 'daudt_siamconc':
-        net = daudtetal2018.SiameseUNetConc(6, 1)
-    elif cfg.MODEL.TYPE == 'our_unet':
-        net = ours.UNet(cfg)
-    else:
-        net = ours.UNet(cfg)
+    # loading network
+    net = load_network(cfg)
 
-
+    # tracking land with w&b
     if not cfg.DEBUG:
         wandb.init(
             name=cfg.NAME,

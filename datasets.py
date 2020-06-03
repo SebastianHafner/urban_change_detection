@@ -57,12 +57,12 @@ class OSCDDataset(torch.utils.data.Dataset):
 
         # creating boolean feature vector to subset sentinel 1 and sentinel 2 bands
         available_features_sentinel1 = ['VV']
-        selected_features_sentinel1 = cfg.DATASET.SENTINEL1.BANDS
+        selected_features_sentinel1 = cfg.DATASET.SENTINEL1_BANDS
         self.s1_feature_selection = self._get_feature_selection(available_features_sentinel1,
                                                                 selected_features_sentinel1)
         available_features_sentinel2 = ['B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08', 'B8A', 'B09', 'B10',
                                         'B11', 'B12']
-        selected_features_sentinel2 = cfg.DATASET.SENTINEL2.BANDS
+        selected_features_sentinel2 = cfg.DATASET.SENTINEL2_BANDS
         self.s2_feature_selection = self._get_feature_selection(available_features_sentinel2,
                                                                 selected_features_sentinel2)
 
@@ -73,13 +73,24 @@ class OSCDDataset(torch.utils.data.Dataset):
         # randomly choosing an orbit for sentinel1
         orbit = np.random.choice(ORBITS[city])
 
-        t1_img = self._get_sentinel_data(city, orbit, 't1')
-        t2_img = self._get_sentinel_data(city, orbit, 't2')
+        if self.cfg.DATASET.MODE == 'optical':
+            t1_img = self._get_sentinel2_data(city, 't1')
+            t2_img = self._get_sentinel2_data(city, 't2')
+        elif self.cfg.DATASET.MODE == 'sar':
+            t1_img = self._get_sentinel1_data(city, orbit, 't1')
+            t2_img = self._get_sentinel1_data(city, orbit, 't2')
+        else:
+            s1_t1_img = self._get_sentinel1_data(city, orbit, 't1')
+            s2_t1_img = self._get_sentinel2_data(city, 't1')
+            t1_img = np.concatenate((s1_t1_img, s2_t1_img), axis=2)
+
+            s1_t2_img = self._get_sentinel1_data(city, orbit, 't2')
+            s2_t2_img = self._get_sentinel2_data(city, 't2')
+            t2_img = np.concatenate((s1_t2_img, s2_t2_img), axis=2)
 
         label = self._get_label_data(city)
-        label = label[:, :, np.newaxis]
-
         t1_img, t2_img, label = self.transform((t1_img, t2_img, label))
+
         sample = {
             't1_img': t1_img,
             't2_img': t2_img,
@@ -89,25 +100,20 @@ class OSCDDataset(torch.utils.data.Dataset):
 
         return sample
 
-    def _get_sentinel_data(self, city, s1_orbit, t):
+    def _get_sentinel1_data(self, city, orbit, t):
+        file = self.root_dir / city / 'sentinel1' / f'sentinel1_{city}_{orbit}_{t}.npy'
+        img = np.load(file)[:, :, self.s1_feature_selection]
+        return img.astype(np.float32)
 
-        s2_file = self.root_dir / city / 'sentinel2' / f'sentinel2_{city}_{t}.npy'
-        s1_file = self.root_dir / city / 'sentinel1' / f'sentinel1_{city}_{s1_orbit}_{t}.npy'
-
-        if self.cfg.DATASET.MODE == 'optical':
-            img = np.load(s2_file)[:, :, self.s2_feature_selection]
-        elif self.cfg.DATASET.MODE == 'radar':
-            img = np.load(s1_file)[:, :, self.s1_feature_selection]
-        else:  # fusion
-            s1_img = np.load(s1_file)[:, :, self.s1_feature_selection]
-            s2_img = np.load(s2_file)[:, :, self.s2_feature_selection]
-            img = np.concatenate((s1_img, s2_img), axis=2)
-
+    def _get_sentinel2_data(self, city, t):
+        file = self.root_dir / city / 'sentinel2' / f'sentinel2_{city}_{t}.npy'
+        img = np.load(file)[:, :, self.s2_feature_selection]
         return img.astype(np.float32)
 
     def _get_label_data(self, city):
         label_file = self.root_dir / city / 'label' / f'urbanchange_{city}.npy'
         label = np.load(label_file).astype(np.float32)
+        label = label[:, :, np.newaxis]
         return label
 
     def _get_feature_selection(self, features, selection):
