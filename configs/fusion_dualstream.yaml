@@ -1,7 +1,6 @@
 _BASE_: "base.yaml"
 
 THRESH: 0.0
-SAVE_MODEL: True
 DEBUG: False
 
 MODEL:

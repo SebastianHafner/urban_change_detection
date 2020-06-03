@@ -107,14 +107,7 @@ def train(net, cfg):
 
             optimizer.zero_grad()
 
-            if cfg.MODEL.TYPE == 'dualstreamunet':
-                n_s1 = len(cfg.DATASET.SENTINEL1_BANDS)
-                n_s2 = len(cfg.DATASET.SENTINEL2_BANDS)
-                s1_t1, s2_t1 = torch.split(t1_img, [n_s1, n_s2], dim=1)
-                s1_t2, s2_t2 = torch.split(t2_img, [n_s1, n_s2], dim=1)
-                output = net(s1_t1, s1_t2, s2_t1, s2_t2)
-            else:
-                output = net(t1_img, t2_img)
+            output = net(t1_img, t2_img)
 
             loss = criterion(output, label)
             loss_tracker += loss.item()
@@ -135,8 +128,7 @@ def train(net, cfg):
                 wandb.log({f'positive pixel ratio': positive_pixels / pixels})
             positive_pixels = 0
             pixels = 0
-            # model_eval(net, cfg, device, run_type='train', epoch=epoch, step=global_step)
-            # model_eval(net, cfg, device, run_type='test', epoch=epoch, step=global_step)
+
             train_f1 = model_eval_multithreshold(net, cfg, device, run_type='train', epoch=epoch, step=global_step)
             test_f1 = model_eval_multithreshold(net, cfg, device, run_type='test', epoch=epoch, step=global_step)
 
@@ -176,14 +168,7 @@ def model_eval_multithreshold(net, cfg, device, run_type, epoch, step):
             t2_img = batch['t2_img'].to(device)
             y_true = batch['label'].to(device)
 
-            if cfg.MODEL.TYPE == 'dualstreamunet':
-                n_s1 = len(cfg.DATASET.SENTINEL1_BANDS)
-                n_s2 = len(cfg.DATASET.SENTINEL2_BANDS)
-                s1_t1, s2_t1 = torch.split(t1_img, [n_s1, n_s2], dim=1)
-                s1_t2, s2_t2 = torch.split(t2_img, [n_s1, n_s2], dim=1)
-                y_pred = net(s1_t1, s1_t2, s2_t1, s2_t2)
-            else:
-                y_pred = net(t1_img, t2_img)
+            y_pred = net(t1_img, t2_img)
 
             y_pred = torch.sigmoid(y_pred)
 

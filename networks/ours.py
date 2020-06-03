@@ -15,18 +15,25 @@ class DualStreamUNet(nn.Module):
         topology = cfg.MODEL.TOPOLOGY
 
         # sentinel-1 unet stream
-        s1_in = len(cfg.DATASET.SENTINEL1_BANDS) * 2
+        n_s1_bands = len(cfg.DATASET.SENTINEL1_BANDS)
+        s1_in = n_s1_bands * 2  # t1 and t2
         self.s1_stream = UNet(cfg, n_channels=s1_in, n_classes=out, topology=topology, enable_outc=False)
+        self.n_s1_bands = n_s1_bands
 
         # sentinel-2 unet stream
-        s2_in = len(cfg.DATASET.SENTINEL2_BANDS) * 2
+        n_s2_bands = len(cfg.DATASET.SENTINEL2_BANDS)
+        s2_in = n_s2_bands * 2
         self.s2_stream = UNet(cfg, n_channels=s2_in, n_classes=out, topology=topology, enable_outc=False)
+        self.n_s2_bands = n_s2_bands
 
         # out block combining unet outputs
         out_dim = 2 * topology[0]
         self.out_conv = OutConv(out_dim, out)
 
-    def forward(self, s1_t1, s1_t2, s2_t1, s2_t2):
+    def forward(self, t1_img, t2_img):
+
+        s1_t1, s2_t1 = torch.split(t1_img, [self.n_s1_bands, self.n_s2_bands], dim=1)
+        s1_t2, s2_t2 = torch.split(t2_img, [self.n_s1_bands, self.n_s2_bands], dim=1)
 
         s1_feature = self.s1_stream(s1_t1, s1_t2)
         s2_feature = self.s2_stream(s2_t1, s2_t2)
