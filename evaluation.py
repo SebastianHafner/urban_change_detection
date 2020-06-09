@@ -5,7 +5,7 @@ from torch.utils import data as torch_data
 
 import matplotlib.pyplot as plt
 import numpy as np
-from networks import daudtetal2018, ours
+from networks.network_loader import load_network
 import datasets
 from experiment_manager.config import new_config
 from pathlib import Path
@@ -22,14 +22,7 @@ def load_cfg(cfg_file: Path):
 # loading network for inference
 def load_net(cfg, net_file):
 
-    if cfg.MODEL.TYPE == 'daudt_unet':
-        net = daudtetal2018.UNet(12, 1)
-    elif cfg.MODEL.TYPE == 'daudt_siamconc':
-        net = daudtetal2018.SiameseUNetConc(6, 1)
-    elif cfg.MODEL.TYPE == 'our_unet':
-        net = ours.UNet(cfg)
-    else:
-        net = ours.UNet(cfg)
+    net = load_network(cfg)
 
     state_dict = torch.load(str(net_file), map_location=lambda storage, loc: storage)
     net.load_state_dict(state_dict)
@@ -53,6 +46,10 @@ def visual_evaluation(root_dir: Path, cfg_file: Path, net_file: Path, dataset: s
     cfg = load_cfg(cfg_file)
     net = load_net(cfg, net_file)
 
+    # bands for visualizaiton
+    s1_bands, s2_bands = cfg.DATASET.SENTINEL1_BANDS, cfg.DATASET.SENTINEL2_BANDS
+    all_bands = s1_bands + s2_bands
+
     dataset = datasets.OSCDDataset(cfg, dataset, no_augmentation=True)
     dataloader_kwargs = {
         'batch_size': 1,
@@ -67,10 +64,10 @@ def visual_evaluation(root_dir: Path, cfg_file: Path, net_file: Path, dataset: s
         for step, batch in enumerate(dataloader):
             city = batch['city'][0]
             print(city)
-            pre_img = batch['t1_img'].to(device)
-            post_img = batch['t2_img'].to(device)
+            t1_img = batch['t1_img'].to(device)
+            t2_img = batch['t2_img'].to(device)
             y_true = batch['label'].to(device)
-            y_pred = net(pre_img, post_img)
+            y_pred = net(t1_img, t2_img)
             y_pred = torch.sigmoid(y_pred)
             y_pred = y_pred.cpu().detach().numpy()[0, ]
             y_pred = y_pred > cfg.THRESH
@@ -85,22 +82,16 @@ def visual_evaluation(root_dir: Path, cfg_file: Path, net_file: Path, dataset: s
                 axs[0].imshow(y_true[:, :, 0])
                 axs[1].imshow(y_pred[:, :, 0])
             else:
-                # sentinel data
-                pre_img = pre_img.cpu().detach().numpy()[0, ]
-                pre_img = pre_img.transpose((1, 2, 0))
-                pre_rgb = pre_img[:, :, [2, 1, 0]] / 0.3
-                pre_rgb = np.minimum(pre_rgb, 1)
-
-                post_img = post_img.cpu().detach().numpy()[0, ]
-                post_img = post_img.transpose((1, 2, 0))
-                post_rgb = post_img[:, :, [2, 1, 0]] / 0.3
-                post_rgb = np.minimum(post_rgb, 1)
-
                 fig, axs = plt.subplots(1, 4, figsize=(20, 10))
+                rgb_indices = [all_bands.index(band) for band in ('B04', 'B03', 'B02')]
+                for i, img in enumerate([t1_img, t2_img]):
+                    img = img.cpu().detach().numpy()[0, ]
+                    img = img.transpose((1, 2, 0))
+                    rgb = img[:, :, rgb_indices] / 0.3
+                    rgb = np.minimum(rgb, 1)
+                    axs[i+2].imshow(rgb)
                 axs[0].imshow(y_true[:, :, 0])
                 axs[1].imshow(y_pred[:, :, 0])
-                axs[2].imshow(pre_rgb)
-                axs[3].imshow(post_rgb)
 
             for ax in axs:
                 ax.set_axis_off()
@@ -115,9 +106,9 @@ def visual_evaluation(root_dir: Path, cfg_file: Path, net_file: Path, dataset: s
             plt.close()
 
 
-def numeric_evaluation(cfg_file: Path, net_file: Path, subset: bool = False):
+def numeric_evaluation(cfg_file: Path, net_file: Path):
 
-    europe = ['montpellier', 'norcia', 'saclay_w', 'valencia', 'milano']
+    tta_thresholds = np.linspace(0, 1, 11)
 
     mode = 'cuda' if torch.cuda.is_available() else 'cpu'
     device = torch.device(mode)
@@ -135,71 +126,102 @@ def numeric_evaluation(cfg_file: Path, net_file: Path, subset: bool = False):
     }
     dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
 
-    pred_results = {'city': [], 'label': [], 'pred': [], 'tta_pred': []}
+    def predict(t1, t2):
+        pred = net(t1, t2)
+        pred = torch.sigmoid(pred) > cfg.THRESH
+        pred = pred.detach().float()
+        return pred
+
+    def evaluate(true, pred):
+        f1_score = eval.f1_score(true.flatten(), pred.flatten(), dim=0).item()
+        true_pos = eval.true_pos(true.flatten(), pred.flatten(), dim=0).item()
+        false_pos = eval.false_pos(true.flatten(), pred.flatten(), dim=0).item()
+        false_neg = eval.false_neg(true.flatten(), pred.flatten(), dim=0).item()
+        return f1_score, true_pos, false_pos, false_neg
+
+    cities, f1_scores, true_positives, false_positives, false_negatives = [], [], [], [], []
+    tta = []
     with torch.no_grad():
         net.eval()
         for step, batch in enumerate(dataloader):
 
+            city = batch['city'][0]
+            print(city)
+            cities.append(city)
+
             t1_img = batch['t1_img'].to(device)
             t2_img = batch['t2_img'].to(device)
+
             y_true = batch['label'].to(device)
 
-            pred_results['label'].append(y_true.flatten())
-            pred_results['city'].append(batch['city'][0])
+            y_pred = predict(t1_img, t2_img)
+            f1_score, tp, fp, fn = evaluate(y_true, y_pred)
+            f1_scores.append(f1_score)
+            true_positives.append(tp)
+            false_positives.append(fp)
+            false_negatives.append(fn)
 
-            # container for test time augmentation (tta)
-            y_preds_tta = []
+            sum_preds = torch.zeros(y_true.shape).float().to(device)
+            n_augs = 0
 
             # rotations
             for k in range(4):
                 t1_img_rot = torch.rot90(t1_img, k, (2, 3))
                 t2_img_rot = torch.rot90(t2_img, k, (2, 3))
-                y_pred = net(t1_img_rot, t2_img_rot)
+                y_pred = predict(t1_img_rot, t2_img_rot)
                 y_pred = torch.rot90(y_pred, 4 - k, (2, 3))
-                y_pred = torch.sigmoid(y_pred) > cfg.THRESH
-                y_pred = y_pred.float()
 
-                # normal predictiion (without test time augmentation)
-                if k == 0:
-                    pred_results['pred'].append(y_pred.flatten())
-
-                y_preds_tta.append(y_pred)
+                sum_preds += y_pred
+                n_augs += 1
 
             # flips
             for flip in [(2, 3), (3, 2)]:
                 t1_img_flip = torch.flip(t1_img, flip)
                 t2_img_flip = torch.flip(t1_img, flip)
-                y_pred = net(t1_img_flip, t2_img_flip)
+                y_pred = predict(t1_img_flip, t2_img_flip)
                 y_pred = torch.flip(y_pred, flip)
-                y_pred = torch.sigmoid(y_pred) > cfg.THRESH
-                y_preds_tta.append(y_pred.float())
 
-            y_preds_tta = torch.cat(y_preds_tta, dim=1)
-            y_pred_tta = torch.mean(y_preds_tta, dim=1, keepdim=True)
-            pred_results['tta_pred'].append(y_pred_tta.flatten())
+                sum_preds += y_pred
+                n_augs += 1
 
-        print('summary')
+            pred_tta = sum_preds.float() / n_augs
+            tta_city = []
+            for ts in tta_thresholds:
+                y_pred = pred_tta > ts
+                y_pred = y_pred.float()
+                eval_ts = evaluate(y_true, y_pred)
+                tta_city.append(eval_ts)
+            tta.append(tta_city)
 
-        if subset:
-            pred_results = subset_pred_results(pred_results, europe)
+        precision = np.sum(true_positives) / (np.sum(true_positives) + np.sum(false_positives))
+        recall = np.sum(true_positives) / (np.sum(true_positives) + np.sum(false_negatives))
+        f1_score = 2 * (precision * recall / (precision + recall))
+        print(f1_score)
 
-        labels = torch.cat(pred_results['label'], dim=0)
-        predictions = torch.cat(pred_results['pred'], dim=0)
-        predictions_tta = torch.cat(pred_results['tta_pred'], dim=0)
+        tta_f1_scores = []
+        for i, ts in enumerate(tta_thresholds):
+            tta_ts = [city[i] for city in tta]
+            tp = np.sum([eval_ts[1] for eval_ts in tta_ts])
+            fp = np.sum([eval_ts[2] for eval_ts in tta_ts])
+            fn = np.sum([eval_ts[3] for eval_ts in tta_ts])
+            pre_tta = tp / (tp + fp + 1e-5)
+            re_tta = tp / (tp + fn + 1e-5)
+            f1_score_tta = 2 * (pre_tta * re_tta / (pre_tta + re_tta + 1e-5))
+            tta_f1_scores.append(f1_score_tta)
+            print(f'{ts:.2f}: {f1_score_tta:.3f}')
 
-        f1 = eval.f1_score(labels, predictions, dim=0)
-        print(f'{f1.item():.3f}')
+        fig, ax = plt.subplots()
+        ax.plot(tta_thresholds, tta_f1_scores)
+        ax.plot(tta_thresholds, [f1_score] * 11, label=f'without tta ({f1_score:.3f})')
+        ax.legend()
+        ax.set_xlabel('tta threshold (gt)')
+        ax.set_ylabel('f1 score')
+        ax.set_title(cfg_file.stem)
+        plt.show()
 
-        thresholds = np.linspace(0, 1, 11)
-        for ts in thresholds:
-            predictions_tta_ts = predictions_tta > ts
-            predictions_tta_ts = predictions_tta_ts.float()
-            f1_tta = eval.f1_score(labels, predictions_tta_ts, dim=0)
-            print(f'{f1_tta.item():.3f} ({ts:.1f})')
 
-        for i, city in enumerate(pred_results['city']):
-            f1 = eval.f1_score(pred_results['label'][i], pred_results['pred'][i], dim=0)
-            print(f'{f1.item():.3f} {city}')
+
+
 
 
 def subset_pred_results(pred_results, cities):
@@ -221,11 +243,11 @@ if __name__ == '__main__':
     STORAGE_DIR = Path('/storage/shafner/urban_change_detection')
 
     dataset = 'OSCD_dataset'
-    cfg = 'fusion_dualstream'
+    cfg = 'optical'
 
     cfg_file = CFG_DIR / f'{cfg}.yaml'
     net_file = NET_DIR / cfg / 'best_net.pkl'
 
-    visual_evaluation(STORAGE_DIR, cfg_file, net_file, 'test', 100, label_pred_only=False)
-    numeric_evaluation(cfg_file, net_file, subset=False)
+    # visual_evaluation(STORAGE_DIR, cfg_file, net_file, 'test', 100, label_pred_only=False)
+    numeric_evaluation(cfg_file, net_file)
 
