@@ -88,6 +88,9 @@ def train(net, cfg):
 
     dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
 
+    save_path = Path(cfg.OUTPUT_BASE_DIR) / cfg.NAME
+    save_path.mkdir(exist_ok=True)
+
     best_test_f1 = 0
     positive_pixels = 0
     pixels = 0
@@ -129,28 +132,37 @@ def train(net, cfg):
             positive_pixels = 0
             pixels = 0
 
-            train_f1 = model_eval_multithreshold(net, cfg, device, run_type='train', epoch=epoch, step=global_step)
-            test_f1 = model_eval_multithreshold(net, cfg, device, run_type='test', epoch=epoch, step=global_step)
+            train_thresholds = torch.linspace(0, 1, 101).to(device)
+            train_maxF1, train_maxTresh = model_evaluation(net, cfg, device, train_thresholds, run_type='train',
+                                                           epoch=epoch, step=global_step)
+
+            test_threshold = torch.tensor([train_maxTresh])
+            test_f1, _ = model_evaluation(net, cfg, device, test_threshold, run_type='test', epoch=epoch,
+                                          step=global_step)
 
             if test_f1 > best_test_f1:
-                print(f'BEST PERFORMANCE SO FAR!', flush=True)
+                print(f'BEST PERFORMANCE SO FAR! <--------------------', flush=True)
                 best_test_f1 = test_f1
 
                 if cfg.SAVE_MODEL and not cfg.DEBUG:
                     print(f'saving network', flush=True)
-                    save_path = Path(cfg.OUTPUT_BASE_DIR) / cfg.NAME
-                    save_path.mkdir(exist_ok=True)
                     model_file = save_path / 'best_net.pkl'
                     torch.save(net.state_dict(), model_file)
 
+            if (epoch + 1) == 375:
+                if cfg.SAVE_MODEL and not cfg.DEBUG:
+                    print(f'saving network', flush=True)
+                    model_file = save_path / f'final_net.pkl'
+                    torch.save(net.state_dict(), model_file)
 
-def model_eval_multithreshold(net, cfg, device, run_type, epoch, step):
 
-    f1_thresholds = torch.linspace(0, 1, 100).to(device)
+def model_evaluation(net, cfg, device, thresholds, run_type, epoch, step):
+
+    thresholds = thresholds.to(device)
     y_true_set = []
     y_pred_set = []
 
-    measurer = eval.MultiThresholdMetric(f1_thresholds)
+    measurer = eval.MultiThresholdMetric(thresholds)
 
     dataset = datasets.OSCDDataset(cfg, run_type, no_augmentation=True)
     dataloader_kwargs = {
@@ -187,6 +199,7 @@ def model_eval_multithreshold(net, cfg, device, run_type, epoch, step):
     argmaxF1 = f1.argmax()
     best_fpr = fpr[argmaxF1]
     best_fnr = fnr[argmaxF1]
+    best_thresh = thresholds[argmaxF1]
 
     if not cfg.DEBUG:
         wandb.log({
@@ -200,7 +213,7 @@ def model_eval_multithreshold(net, cfg, device, run_type, epoch, step):
 
     print(f'{maxF1.item():.3f}', flush=True)
 
-    return maxF1.item()
+    return maxF1.item(), best_thresh.item()
 
 
 if __name__ == '__main__':

@@ -4,6 +4,7 @@ from torchvision import transforms
 from pathlib import Path
 import numpy as np
 import augmentations as aug
+import random
 
 ORBITS = {
     'aguasclaras': [24],
@@ -69,6 +70,9 @@ class OSCDDataset(torch.utils.data.Dataset):
     def __getitem__(self, index):
 
         city = self.cities[index]
+
+        # np.random.seed(self.cfg.SEED)
+        # random.seed(self.cfg.SEED)
 
         # randomly choosing an orbit for sentinel1
         orbit = np.random.choice(ORBITS[city])

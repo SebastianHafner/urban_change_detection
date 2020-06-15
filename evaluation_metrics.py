@@ -1,7 +1,7 @@
 import torch
 
 
-class MultiThresholdMetric():
+class MultiThresholdMetric(object):
     def __init__(self, threshold):
 
         # FIXME Does not operate properly
