@@ -76,6 +76,7 @@ class OSCDDataset(torch.utils.data.Dataset):
 
         # randomly choosing an orbit for sentinel1
         orbit = np.random.choice(ORBITS[city])
+        # orbit = ORBITS[city][0]
 
         if self.cfg.DATASET.MODE == 'optical':
             t1_img = self._get_sentinel2_data(city, 't1')
