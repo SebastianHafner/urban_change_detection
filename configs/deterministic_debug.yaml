@@ -3,6 +3,7 @@ _BASE_: "base.yaml"
 THRESH: 0.98
 
 SAVE_MODEL: False
+DEBUG: False
 
 SEED: 7
 
@@ -17,5 +18,6 @@ DATASET:
   SENTINEL1_BANDS: ['VV']
 
 AUGMENTATION:
-  RANDOM_FLIP: False
-  RANDOM_ROTATE: False
+  RANDOM_FLIP: True
+  RANDOM_ROTATE: True
+  CROP_TYPE: 'importance'

@@ -223,6 +223,11 @@ if __name__ == '__main__':
     args = parser.parse_known_args()[0]
     cfg = setup(args)
 
+    torch.manual_seed(cfg.SEED)
+    np.random.seed(cfg.SEED)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
     # loading network
     net = load_network(cfg)
 
@@ -233,11 +238,6 @@ if __name__ == '__main__':
             project='urban_change_detection',
             tags=['run', 'change', 'detection', ],
         )
-
-    torch.manual_seed(cfg.SEED)
-    np.random.seed(cfg.SEED)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
 
     try:
         train(net, cfg)

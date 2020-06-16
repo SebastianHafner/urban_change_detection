@@ -1,7 +1,7 @@
 _BASE_: "base.yaml"
 
-SEED: 7
-
+SEED: 1
+SAVE_MODEL: False
 THRESH: 0.66
 
 MODEL:
