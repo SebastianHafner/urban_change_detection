@@ -12,7 +12,7 @@ MODEL:
   POSITIVE_WEIGHT: 0.9
   PRINT_SUMMARY: False
 DATALOADER:
-  NUM_WORKER: 16
+  NUM_WORKER: 8
   SHUFFLE: True
 DATASET:
   PATH: '/storage/shafner/urban_change_detection/OSCD_dataset/preprocessed/'
