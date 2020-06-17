@@ -10,8 +10,9 @@ MODEL:
   IN_CHANNELS: 26
   LOSS_TYPE: 'JaccardLikeLoss'
   POSITIVE_WEIGHT: 0.9
+  PRINT_SUMMARY: False
 DATALOADER:
-  NUM_WORKER: 8
+  NUM_WORKER: 16
   SHUFFLE: True
 DATASET:
   PATH: '/storage/shafner/urban_change_detection/OSCD_dataset/preprocessed/'
