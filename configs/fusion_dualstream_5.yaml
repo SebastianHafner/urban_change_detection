@@ -1,8 +1,8 @@
 _BASE_: "base.yaml"
 
-SEED: 90
-
+SEED: 5
 THRESH: 0.66
+SAVE_MODEL: False
 
 MODEL:
   TYPE: 'dualstreamunet'
