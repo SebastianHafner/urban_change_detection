@@ -106,6 +106,64 @@ def visual_evaluation(root_dir: Path, cfg_file: Path, net_file: Path, dataset: s
             plt.close()
 
 
+def visualize_missclassifications(root_dir: Path, cfg_file: Path, net_file: Path, save_dir: Path = None):
+
+    mode = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = torch.device(mode)
+
+    # loading cfg and network
+    cfg = load_cfg(cfg_file)
+    net = load_net(cfg, net_file)
+
+    dataset = datasets.OSCDDataset(cfg, 'test', no_augmentation=True)
+    dataloader_kwargs = {
+        'batch_size': 1,
+        'num_workers': 0,
+        'shuffle': False,
+        'pin_memory': True,
+    }
+    dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
+
+    with torch.no_grad():
+        net.eval()
+        for step, batch in enumerate(dataloader):
+            city = batch['city'][0]
+            print(city)
+            t1_img = batch['t1_img'].to(device)
+            t2_img = batch['t2_img'].to(device)
+            y_true = batch['label'].to(device)
+            y_pred = net(t1_img, t2_img)
+            y_pred = torch.sigmoid(y_pred)
+            y_pred = y_pred.cpu().detach().numpy()[0, ]
+            y_pred = y_pred > cfg.THRESH
+            y_pred = y_pred.transpose((1, 2, 0)).astype('uint8')[:, :, 0]
+
+            # label
+            y_true = y_true.cpu().detach().numpy()[0, ]
+            y_true = y_true.transpose((1, 2, 0)).astype('uint8')[:, :, 0]
+
+            img = np.zeros((*y_true.shape, 3))
+            true_positives = np.logical_and(y_pred, y_true)
+            false_positives = np.logical_and(y_pred, np.logical_not(y_true))
+            false_negatives = np.logical_and(np.logical_not(y_pred), y_true)
+            img[true_positives, :] = [1, 1, 1]
+            img[false_positives] = [0, 1, 0]
+            img[false_negatives] = [1, 0, 1]
+
+            fig, ax = plt.subplots()
+            ax.imshow(img)
+            ax.set_axis_off()
+
+            if save_dir is None:
+                save_dir = root_dir / 'evaluation' / cfg_file.stem
+            if not save_dir.exists():
+                save_dir.mkdir()
+            file = save_dir / f'missclassfications_{cfg_file.stem}_{city}.png'
+
+            plt.savefig(file, dpi=300, bbox_inches='tight')
+            plt.close()
+
+
 def numeric_evaluation(cfg_file: Path, net_file: Path):
 
     tta_thresholds = np.linspace(0, 1, 11)
@@ -196,7 +254,7 @@ def numeric_evaluation(cfg_file: Path, net_file: Path):
         precision = np.sum(true_positives) / (np.sum(true_positives) + np.sum(false_positives))
         recall = np.sum(true_positives) / (np.sum(true_positives) + np.sum(false_negatives))
         f1_score = 2 * (precision * recall / (precision + recall))
-        print(f1_score)
+        print(f'precision: {precision:.3f}, recall: {recall:.3f}, f1: {f1_score:.3f}')
 
         tta_f1_scores = []
         for i, ts in enumerate(tta_thresholds):
@@ -217,7 +275,7 @@ def numeric_evaluation(cfg_file: Path, net_file: Path):
         ax.set_xlabel('tta threshold (gt)')
         ax.set_ylabel('f1 score')
         ax.set_title(cfg_file.stem)
-        plt.show()
+        # plt.show()
 
 
 
@@ -243,11 +301,12 @@ if __name__ == '__main__':
     STORAGE_DIR = Path('/storage/shafner/urban_change_detection')
 
     dataset = 'OSCD_dataset'
-    cfg = 'fusion_dualstream_8'
+    cfg = 'fusion_9'
 
     cfg_file = CFG_DIR / f'{cfg}.yaml'
-    net_file = NET_DIR / cfg / 'best_net.pkl'
+    net_file = NET_DIR / cfg / 'final_net.pkl'
 
     # visual_evaluation(STORAGE_DIR, cfg_file, net_file, 'test', 100, label_pred_only=False)
-    numeric_evaluation(cfg_file, net_file)
+    visualize_missclassifications(STORAGE_DIR, cfg_file, net_file)
+    # numeric_evaluation(cfg_file, net_file)
 
