@@ -1,10 +1,10 @@
 _BASE_: "base.yaml"
 
-THRESH: 0.98
+THRESH: 0.99
 
 SEED: 4
 
-SAVE_MODEL: False
+SAVE_MODEL: True
 
 MODEL:
   IN_CHANNELS: 2

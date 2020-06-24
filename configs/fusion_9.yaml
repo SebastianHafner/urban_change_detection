@@ -1,8 +1,8 @@
 _BASE_: "base.yaml"
 
 SEED: 9
-THRESH: 0.00
-SAVE_MODEL: False
+THRESH: 0.75
+SAVE_MODEL: True
 
 MODEL:
   TYPE: 'unet'
