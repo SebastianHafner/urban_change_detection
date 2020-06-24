@@ -106,6 +106,50 @@ def visual_evaluation(root_dir: Path, cfg_file: Path, net_file: Path, dataset: s
             plt.close()
 
 
+def visualize_images(root_dir: Path, save_dir: Path = None):
+
+    mode = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = torch.device(mode)
+
+    cfg_file = Path.cwd() / 'configs' / 'optical_visualization.yaml'
+    cfg = load_cfg(cfg_file)
+
+    dataset = datasets.OSCDDataset(cfg, 'test', no_augmentation=True)
+    dataloader_kwargs = {
+        'batch_size': 1,
+        'num_workers': 0,
+        'shuffle': False,
+        'pin_memory': True,
+    }
+    dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
+
+    with torch.no_grad():
+        for step, batch in enumerate(dataloader):
+            city = batch['city'][0]
+            print(city)
+            t1_img = batch['t1_img'].to(device)
+            t2_img = batch['t2_img'].to(device)
+
+            rgb_indices = [3, 2, 1]
+            for i, img in enumerate([t1_img, t2_img]):
+                fig, ax = plt.subplots()
+                img = img.cpu().detach().numpy()[0,]
+                img = img.transpose((1, 2, 0))
+                rgb = img[:, :, rgb_indices] / 0.3
+                rgb = np.minimum(rgb, 1)
+                ax.imshow(rgb)
+                ax.set_axis_off()
+
+                if save_dir is None:
+                    save_dir = root_dir / 'evaluation' / 'images'
+                if not save_dir.exists():
+                    save_dir.mkdir()
+                file = save_dir / f'{city}_img{i + 1}.png'
+
+                plt.savefig(file, dpi=300, bbox_inches='tight')
+                plt.close()
+
+
 def visualize_missclassifications(root_dir: Path, cfg_file: Path, net_file: Path, save_dir: Path = None):
 
     mode = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -307,6 +351,7 @@ if __name__ == '__main__':
     net_file = NET_DIR / cfg / 'final_net.pkl'
 
     # visual_evaluation(STORAGE_DIR, cfg_file, net_file, 'test', 100, label_pred_only=False)
-    visualize_missclassifications(STORAGE_DIR, cfg_file, net_file)
+    # visualize_missclassifications(STORAGE_DIR, cfg_file, net_file)
+    visualize_images(STORAGE_DIR)
     # numeric_evaluation(cfg_file, net_file)
 
