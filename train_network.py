@@ -146,10 +146,10 @@ def train(net, cfg):
 
                 if cfg.SAVE_MODEL and not cfg.DEBUG:
                     print(f'saving network', flush=True)
-                    model_file = save_path / 'best_net.pkl'
-                    torch.save(net.state_dict(), model_file)
+                    # model_file = save_path / 'best_net.pkl'
+                    # torch.save(net.state_dict(), model_file)
 
-            if (epoch + 1) == 375:
+            if (epoch + 1) == 390:
                 if cfg.SAVE_MODEL and not cfg.DEBUG:
                     print(f'saving network', flush=True)
                     model_file = save_path / f'final_net.pkl'
