@@ -75,11 +75,13 @@ def train(net, cfg):
 
     # reset the generators
     dataset = datasets.OSCDDataset(cfg, 'train')
+    drop_last = True
+    batch_size = cfg.TRAINER.BATCH_SIZE
     dataloader_kwargs = {
-        'batch_size': cfg.TRAINER.BATCH_SIZE,
+        'batch_size': batch_size,
         'num_workers': 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER,
         'shuffle': cfg.DATALOADER.SHUFFLE,
-        'drop_last': True,
+        'drop_last': drop_last,
         'pin_memory': True,
     }
     if cfg.AUGMENTATION.OVERSAMPLING != 'none':
@@ -96,6 +98,7 @@ def train(net, cfg):
     pixels = 0
     global_step = 0
     epochs = cfg.TRAINER.EPOCHS
+    batches = len(dataloader) // batch_size if drop_last else len(dataloader) // batch_size + 1
     for epoch in range(epochs):
 
         loss_tracker = 0
@@ -123,19 +126,26 @@ def train(net, cfg):
             global_step += 1
 
         if epoch % cfg.LOGGING == 0:
-            # evaluate model after every epoch
             print(f'epoch {epoch} / {cfg.TRAINER.EPOCHS}')
-            # print(f'loss {loss_tracker:.5f}')
-            # print(f'positive pixel ratio: {positive_pixels / pixels:.3f}')
-            if not cfg.DEBUG:
+
+            # printing and logging loss
+            avg_loss = loss_tracker / batches
+            print(f'avg training loss {avg_loss:.5f}')
+
+            # positive pixel ratio used to check oversampling
+            if cfg.DEBUG:
+                print(f'positive pixel ratio: {positive_pixels / pixels:.3f}')
+            else:
                 wandb.log({f'positive pixel ratio': positive_pixels / pixels})
             positive_pixels = 0
             pixels = 0
 
+            # model evaluation
+            # train (different thresholds are tested)
             train_thresholds = torch.linspace(0, 1, 101).to(device)
             train_maxF1, train_maxTresh = model_evaluation(net, cfg, device, train_thresholds, run_type='train',
                                                            epoch=epoch, step=global_step)
-
+            # test (using the best training threshold)
             test_threshold = torch.tensor([train_maxTresh])
             test_f1, _ = model_evaluation(net, cfg, device, test_threshold, run_type='test', epoch=epoch,
                                           step=global_step)
