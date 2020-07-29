@@ -16,10 +16,10 @@ from experiment_manager import args
 from experiment_manager.config import config
 
 # custom stuff
-import augmentations as aug
 import evaluation_metrics as eval
 import loss_functions as lf
 import datasets
+import utils
 
 # networks from papers and ours
 from networks.network_loader import load_network
@@ -113,7 +113,18 @@ def train(net, cfg):
 
             optimizer.zero_grad()
 
-            output = net(t1_img, t2_img)
+            if cfg.DATASET.MODE == 'optical' and cfg.DATASET.CVA:
+                magnitude, angle = utils.change_vector_analysis(t1_img, t2_img)
+                cva = torch.cat([magnitude, angle], dim=1)
+                output = net(cva)
+            elif cfg.DATASET.MODE == 'sar' and cfg.DATASET.LOG_RATIO:
+                log_ratio = utils.log_ratio(t1_img, t2_img)
+                output = net(log_ratio)
+            elif cfg.DATASET.MODE == 'fusion' and cfg.DATASET.CVA and cfg.DATASET.LOG_RATIO:
+                output = None
+            # no feature engineering via differencing
+            else:
+                output = net(t1_img, t2_img)
 
             loss = criterion(output, label)
             loss_tracker += loss.item()
