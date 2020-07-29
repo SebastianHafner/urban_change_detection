@@ -52,6 +52,7 @@ def euclidean_distance(t1_img: torch.Tensor, t2_img: torch.Tensor) -> torch.Tens
     return distance
 
 
+# according to: https://www.geo.uzh.ch/microsite/rsl-documents/research/publications/other-sci-communications/2009_SAMAnisotropy_SPIE_JW-0471040512/2009_SAMAnisotropy_SPIE_JW.pdf
 def spectral_angle_mapper(t1_img: torch.Tensor, t2_img: torch.Tensor) -> torch.Tensor:
 
     nominator = 0
