@@ -1,7 +1,7 @@
 _BASE_: "base_optical_differencing.yaml"
 
-DEBUG: True
-SAVE_MODEL: False
+DEBUG: False
+SAVE_MODEL: True
 
 MODEL:
   TYPE: 'unet'
@@ -10,6 +10,3 @@ MODEL:
 DATASET:
   MODE: 'optical'
   SENTINEL2_BANDS: ['B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08', 'B8A', 'B09', 'B10', 'B11', 'B12']
-
-DATALOADER:
-  NUM_WORKERS: 16

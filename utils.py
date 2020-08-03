@@ -2,6 +2,9 @@ import torch
 import rasterio
 from pathlib import Path
 import math
+import numpy as np
+
+EPSILON = 1e-10
 
 
 # reading in geotiff file as numpy array
@@ -43,67 +46,83 @@ def write_tif(file: Path, arr, transform, crs):
 def to_numpy(tensor:torch.Tensor):
     return tensor.cpu().detach().numpy()
 
-
-def euclidean_distance(t1_img: torch.Tensor, t2_img: torch.Tensor) -> torch.Tensor:
+# returns 2d distance array from two n-dimensional arrays
+def euclidean_distance(t1_img: np.ndarray, t2_img: np.ndarray) -> np.ndarray:
     diff = t1_img - t2_img
-    diff_squared = torch.square(diff)
-    sum_ = torch.sum(diff_squared, dim=0, keepdim=True)
-    distance = torch.sqrt(sum_)
+    diff_squared = np.square(diff)
+    distance = np.sqrt(np.sum(diff_squared, axis=-1))
     return distance
 
 
 # according to: https://www.geo.uzh.ch/microsite/rsl-documents/research/publications/other-sci-communications/2009_SAMAnisotropy_SPIE_JW-0471040512/2009_SAMAnisotropy_SPIE_JW.pdf
-def spectral_angle_mapper(t1_img: torch.Tensor, t2_img: torch.Tensor) -> torch.Tensor:
+def spectral_angle_mapper(t1_img: np.ndarray, t2_img: np.ndarray, radians: bool = True) -> np.ndarray:
 
-    nominator = 0
+    nominator = np.sum(t1_img * t2_img, axis=-1)
 
-    denominator1 = torch.sqrt(torch.sum(torch.square(t1_img), dim=0))
-    denominator2 = torch.sqrt(torch.sum(torch.square(t2_img), dim=0))
+    denominator1 = np.sqrt(np.sum(np.square(t1_img), axis=-1))
+    denominator2 = np.sqrt(np.sum(np.square(t2_img), axis=-1))
+    denominator = denominator1 * denominator2 + EPSILON
 
-    angle = torch.acos((nominator / (denominator1 + denominator2)))
-    return angle
+    a_radians = np.arccos((nominator / denominator))
+
+    return a_radians if radians else a_radians * 180 / math.pi
 
 
-# according to formula in: https://reader.elsevier.com/reader/sd/pii/S1878029611008607?token=95EB0C4C341A3C82861FDB0F250C9315C15C62CF192A4A3823750BB21E22DBDCC17D19E07E019CF03FCA328AAEAA3718
-def change_vector_analysis(t1_img: torch.Tensor, t2_img: torch.Tensor) -> tuple:
-    # images with shape (C x H x W)
+# references:
+# https://reader.elsevier.com/reader/sd/pii/S1878029611008607?token=95EB0C4C341A3C82861FDB0F250C9315C15C62CF192A4A3823750BB21E22DBDCC17D19E07E019CF03FCA328AAEAA3718
+# http://remote-sensing.org/change-vector-analysis-explained-graphically/
+# http://www.gitta.info/ThemChangeAna/en/html/TimeChAn_learningObject1.html
+def change_vector_analysis(t1_img: np.ndarray, t2_img: np.ndarray) -> np.ndarray:
+    # images with shape (H x W x 2)
 
-    # computing euclidean distance
-    distance = euclidean_distance(t1_img, t2_img)
+    # computing magnitude
+    magnitude = euclidean_distance(t1_img, t2_img)
+    magnitude = normalize(magnitude, 0, 1.414214)
 
-    # computing direction (angle)
-    direction = spectral_angle_mapper(t1_img, t2_img)
+    # computing angle(s)
+    change_vector = t2_img - t1_img
+    reference_vector = np.zeros(change_vector.shape)
+    reference_vector[0, ] = 1
+    direction = spectral_angle_mapper(change_vector, reference_vector)
     direction = normalize(direction, 0, math.pi)
 
-    return distance, direction
+    cva = np.stack((magnitude, direction), axis=-1)
+
+    return cva
 
 
-def log_ratio(t1_img: torch.Tensor, t2_img: torch.Tensor) -> torch.Tensor:
+def log_ratio(t1_img: np.ndarray, t2_img: np.ndarray) -> np.ndarray:
     logR = t1_img - t2_img
-    logR = normalize(logR, -1, 1, 0, 1)
+    logR = normalize(logR, -1, 1)
     return logR
 
 
-def rescale(img: torch.Tensor, from_min: float, from_max: float, to_min: float, to_max: float) -> torch.Tensor:
-    return img
+def normalize(img: np.ndarray, from_min: float, from_max: float) -> np.ndarray:
+    return (img - from_min) / (from_max - from_min + EPSILON)
 
 
-def normalize(img: torch.Tensor, from_min: float, from_max: float) -> torch.Tensor:
-    return rescale(img, from_min, from_max, 0, 1)
+def normalized_difference(img: np.ndarray, band1: int, band2: int):
+    img1, img2 = img[:, :, band1], img[:, :, band2]
+    return (img1 - img2) / (img1 + img2 + EPSILON)
 
 
 if __name__ == '__main__':
 
-    a = torch.ones(2, 4, 4).to('cuda')
-    a[0, ] = 0
-    a[1, ] = 0
-    b = torch.ones(2, 4, 4).to('cuda')
-    b[0, ] = 1
-    b[1, ] = 1
-    distance = euclidean_distance(a, b)
-    print(distance)
+    # a = torch.ones(2, 4, 4).to('cuda')
+    # a[0, ] = 3
+    # a[1, ] = 4
+    # b = torch.ones(2, 4, 4).to('cuda')
+    # b[0, ] = 4
+    # b[1, ] = 3
+    # distance = euclidean_distance(a, b)
+    # print(distance)
+    #
+    # direction = spectral_angle_mapper(a, b)
+    # print(direction)
 
-    direction = spectral_angle_mapper(a, b)
-    print(direction)
+    a = np.zeros(4, 4, 2)
+    b = np.ones(4, 4, 2)
+    b[:, :, 0] = 0
+    change_vector_analysis(a, b)
 
     pass

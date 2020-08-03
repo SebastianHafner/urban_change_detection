@@ -19,7 +19,7 @@ from experiment_manager.config import config
 import evaluation_metrics as eval
 import loss_functions as lf
 import datasets
-import utils
+from utils import *
 
 # networks from papers and ours
 from networks.network_loader import load_network
@@ -37,7 +37,6 @@ def setup(args):
 
 
 def train(net, cfg):
-
     # setting device on GPU if available, else CPU
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('Using device:', device)
@@ -66,15 +65,19 @@ def train(net, cfg):
     elif cfg.MODEL.LOSS_TYPE == 'WeightedComboLoss':
         criterion = lambda pred, gts: 2 * F.binary_cross_entropy_with_logits(pred, gts) + lf.soft_dice_loss(pred, gts)
     elif cfg.MODEL.LOSS_TYPE == 'FrankensteinLoss':
-        criterion = lambda pred, gts: F.binary_cross_entropy_with_logits(pred, gts) + lf.jaccard_like_balanced_loss(pred, gts)
+        criterion = lambda pred, gts: F.binary_cross_entropy_with_logits(pred, gts) + lf.jaccard_like_balanced_loss(
+            pred, gts)
     elif cfg.MODEL.LOSS_TYPE == 'WeightedFrankensteinLoss':
         positive_weight = torch.tensor([cfg.MODEL.POSITIVE_WEIGHT]).float().to(device)
-        criterion = lambda pred, gts: F.binary_cross_entropy_with_logits(pred, gts, pos_weight=positive_weight) + 5 * lf.jaccard_like_balanced_loss(pred, gts)
+        criterion = lambda pred, gts: F.binary_cross_entropy_with_logits(pred, gts,
+                                                                         pos_weight=positive_weight) + 5 * lf.jaccard_like_balanced_loss(
+            pred, gts)
     else:
         criterion = lf.soft_dice_loss
 
     # reset the generators
-    dataset = datasets.OSCDDataset(cfg, 'train')
+    mode = cfg.DATASET.MODE
+    dataset = datasets.OSCDDifferenceImages(cfg, 'train')
     drop_last = True
     batch_size = cfg.TRAINER.BATCH_SIZE
     dataloader_kwargs = {
@@ -106,14 +109,12 @@ def train(net, cfg):
 
         for i, batch in enumerate(dataloader):
 
-            t1_img = batch['t1_img'].to(device)
-            t2_img = batch['t2_img'].to(device)
-
+            diff_img = batch['diff_img'].to(device)
             label = batch['label'].to(device)
 
             optimizer.zero_grad()
 
-            output = net(t1_img, t2_img)
+            output = net(diff_img)
 
             loss = criterion(output, label)
             loss_tracker += loss.item()
@@ -167,14 +168,13 @@ def train(net, cfg):
 
 
 def model_evaluation(net, cfg, device, thresholds, run_type, epoch, step):
-
     thresholds = thresholds.to(device)
     y_true_set = []
     y_pred_set = []
 
     measurer = eval.MultiThresholdMetric(thresholds)
 
-    dataset = datasets.OSCDDataset(cfg, run_type, no_augmentation=True)
+    dataset = datasets.OSCDDifferenceImages(cfg, run_type, no_augmentation=True)
     dataloader_kwargs = {
         'batch_size': 1,
         'num_workers': 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER,
@@ -186,11 +186,10 @@ def model_evaluation(net, cfg, device, thresholds, run_type, epoch, step):
     with torch.no_grad():
         net.eval()
         for step, batch in enumerate(dataloader):
-            t1_img = batch['t1_img'].to(device)
-            t2_img = batch['t2_img'].to(device)
+            diff_img = batch['diff_img'].to(device)
             y_true = batch['label'].to(device)
 
-            y_pred = net(t1_img, t2_img)
+            y_pred = net(diff_img)
 
             y_pred = torch.sigmoid(y_pred)
 
@@ -257,5 +256,3 @@ if __name__ == '__main__':
             sys.exit(0)
         except SystemExit:
             os._exit(0)
-
-
