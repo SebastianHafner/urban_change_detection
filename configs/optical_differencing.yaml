@@ -5,8 +5,9 @@ SAVE_MODEL: True
 
 MODEL:
   TYPE: 'unet'
-  IN_CHANNELS: 2
+  IN_CHANNELS: 4
 
 DATASET:
   MODE: 'optical'
-  SENTINEL2_BANDS: ['B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08', 'B8A', 'B09', 'B10', 'B11', 'B12']
+  SENTINEL2_BANDS: ['B02', 'B03', 'B04', 'B08']
+  INDICES: False

@@ -74,19 +74,26 @@ def spectral_angle_mapper(t1_img: np.ndarray, t2_img: np.ndarray, radians: bool 
 # http://www.gitta.info/ThemChangeAna/en/html/TimeChAn_learningObject1.html
 def change_vector_analysis(t1_img: np.ndarray, t2_img: np.ndarray) -> np.ndarray:
     # images with shape (H x W x 2)
+    shape = t1_img.shape
+    n = shape[-1]
 
     # computing magnitude
     magnitude = euclidean_distance(t1_img, t2_img)
-    magnitude = normalize(magnitude, 0, 1.414214)
+    # magnitude = normalize(magnitude, 0, 1.414214)
+    magnitude = magnitude[:, :, None]
 
-    # computing angle(s)
-    change_vector = t2_img - t1_img
-    reference_vector = np.zeros(change_vector.shape)
-    reference_vector[0, ] = 1
-    direction = spectral_angle_mapper(change_vector, reference_vector)
-    direction = normalize(direction, 0, math.pi)
+    # computing n - 1 angles (1 for bivariate)
+    change_vectors = t2_img - t1_img
+    reference_vector = np.zeros((shape[0], shape[1], 2))
+    reference_vector[:, :, 1] = 1
+    directions = np.zeros((shape[0], shape[1], n - 1))
+    for i in range(n - 1):
+        change_vector = change_vectors[:, :, [i, -1]]
+        direction = spectral_angle_mapper(change_vector, reference_vector)
+        directions[:, :, 0] = direction
+        # directions[:, :, 0] = normalize(direction, 0, math.pi)
 
-    cva = np.stack((magnitude, direction), axis=-1)
+    cva = np.concatenate((magnitude, directions), axis=-1)
 
     return cva
 

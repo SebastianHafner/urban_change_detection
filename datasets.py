@@ -192,20 +192,22 @@ class OSCDDifferenceImages(OSCDDataset):
 
     def optical_difference_image(self, t1_img: np.ndarray, t2_img: np.ndarray) -> np.ndarray:
 
-        # change vector analysis with ndvi and ndbi
-        red = self.band_index('B04')
-        nir = self.band_index('B08')
-        swir = self.band_index('B11')
+        if self.cfg.DATASET.INDICES:
+            # change vector analysis with ndvi and ndbi
+            red = self.band_index('B04')
+            nir = self.band_index('B08')
+            swir = self.band_index('B11')
 
-        t1_ndvi = normalize(normalized_difference(t1_img, red, nir), -1, 1)
-        t1_ndbi = normalize(normalized_difference(t1_img, swir, nir), -1, 1)
-        t1_indices = np.stack((t1_ndvi, t1_ndbi), axis=-1)
+            t1_ndvi = normalize(normalized_difference(t1_img, red, nir), -1, 1)
+            t1_ndbi = normalize(normalized_difference(t1_img, swir, nir), -1, 1)
+            t1_indices = np.stack((t1_ndvi, t1_ndbi), axis=-1)
 
-        t2_ndvi = normalize(normalized_difference(t2_img, red, nir), -1, 1)
-        t2_ndbi = normalize(normalized_difference(t2_img, swir, nir), -1, 1)
-        t2_indices = np.stack((t2_ndvi, t2_ndbi), axis=-1)
+            t2_ndvi = normalize(normalized_difference(t2_img, red, nir), -1, 1)
+            t2_ndbi = normalize(normalized_difference(t2_img, swir, nir), -1, 1)
+            t2_indices = np.stack((t2_ndvi, t2_ndbi), axis=-1)
+            t1_img, t2_img = t1_indices, t2_indices
 
-        cva = change_vector_analysis(t1_indices, t2_indices)
+        cva = change_vector_analysis(t1_img, t2_img)
 
         return cva.astype(np.float32)
 
@@ -214,7 +216,7 @@ class OSCDDifferenceImages(OSCDDataset):
         # log ration of VV
         vv = self.band_index('VV')
 
-        t1_vv = t1_img[:, : vv]
+        t1_vv = t1_img[:, :, vv]
         t2_vv = t2_img[:, :, vv]
 
         lr = log_ratio(t1_vv, t2_vv)
