@@ -12,7 +12,7 @@ MODEL:
   POSITIVE_WEIGHT: 0.9
   PRINT_SUMMARY: False
 DATALOADER:
-  NUM_WORKER: 8
+  NUM_WORKER: 16
   SHUFFLE: True
 DATASET:
   PATH: '/storage/shafner/urban_change_detection/OSCD_dataset/preprocessed/'
@@ -24,6 +24,7 @@ DATASET:
   TEST: ['brasilia', 'montpellier', 'norcia', 'rio', 'saclay_w', 'valencia', 'dubai', 'lasvegas', 'milano',
         'chongqing']
   TRAIN_MULTIPLIER: 5
+  LOAD_INTO_MEMORY: False
 OUTPUT_BASE_DIR: '/storage/shafner/urban_change_detection/run_logs/'
 TRAINER:
   LR: 5e-5

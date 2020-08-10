@@ -37,7 +37,6 @@ def setup(args):
 
 
 def train(net, cfg):
-
     # setting device on GPU if available, else CPU
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('Using device:', device)
@@ -66,18 +65,20 @@ def train(net, cfg):
     elif cfg.MODEL.LOSS_TYPE == 'WeightedComboLoss':
         criterion = lambda pred, gts: 2 * F.binary_cross_entropy_with_logits(pred, gts) + lf.soft_dice_loss(pred, gts)
     elif cfg.MODEL.LOSS_TYPE == 'FrankensteinLoss':
-        criterion = lambda pred, gts: F.binary_cross_entropy_with_logits(pred, gts) + lf.jaccard_like_balanced_loss(pred, gts)
+        criterion = lambda pred, gts: F.binary_cross_entropy_with_logits(pred, gts) + lf.jaccard_like_balanced_loss(
+            pred, gts)
     elif cfg.MODEL.LOSS_TYPE == 'WeightedFrankensteinLoss':
         positive_weight = torch.tensor([cfg.MODEL.POSITIVE_WEIGHT]).float().to(device)
-        criterion = lambda pred, gts: F.binary_cross_entropy_with_logits(pred, gts, pos_weight=positive_weight) + 5 * lf.jaccard_like_balanced_loss(pred, gts)
+        criterion = lambda pred, gts: F.binary_cross_entropy_with_logits(pred, gts,
+                                                                         pos_weight=positive_weight) + 5 * lf.jaccard_like_balanced_loss(
+            pred, gts)
     else:
         criterion = lf.soft_dice_loss
 
-    # reset the generators
-    if cfg.DATASET.LOAD_INTO_MEMORY:
-        dataset = datasets.OSCDDatasetFast(cfg, 'train')
-    else:
-        dataset = datasets.OSCDDataset(cfg, 'train')
+    # load datasets
+    train_dataset = datasets.OSCDDatasetNewPrep(cfg, 'train')
+    test_dataset = datasets.OSCDDatasetNewPrep(cfg, 'test')
+
     drop_last = True
     batch_size = cfg.TRAINER.BATCH_SIZE
     dataloader_kwargs = {
@@ -88,10 +89,10 @@ def train(net, cfg):
         'pin_memory': True,
     }
     if cfg.AUGMENTATION.OVERSAMPLING != 'none':
-        dataloader_kwargs['sampler'] = dataset.sampler()
+        dataloader_kwargs['sampler'] = train_dataset.sampler()
         dataloader_kwargs['shuffle'] = False
 
-    dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
+    dataloader = torch_data.DataLoader(train_dataset, **dataloader_kwargs)
 
     save_path = Path(cfg.OUTPUT_BASE_DIR) / cfg.NAME
     save_path.mkdir(exist_ok=True)
@@ -101,14 +102,15 @@ def train(net, cfg):
     pixels = 0
     global_step = 0
     epochs = cfg.TRAINER.EPOCHS
-    batches = len(dataset) // batch_size if drop_last else len(dataset) // batch_size + 1
+    batches = len(train_dataset) // batch_size if drop_last else len(train_dataset) // batch_size + 1
     for epoch in range(epochs):
 
         loss_tracker = 0
         net.train()
 
         for i, batch in enumerate(dataloader):
-
+            if i % 1000 == 0:
+                print(f'{i}/{batches}')
             t1_img = batch['t1_img'].to(device)
             t2_img = batch['t2_img'].to(device)
 
@@ -146,12 +148,12 @@ def train(net, cfg):
             # model evaluation
             # train (different thresholds are tested)
             train_thresholds = torch.linspace(0, 1, 101).to(device)
-            train_maxF1, train_maxTresh = model_evaluation(net, cfg, device, train_thresholds, run_type='train',
-                                                           epoch=epoch, step=global_step)
+            train_maxF1, train_maxTresh = model_evaluation(net, train_dataset, train_thresholds, device, 'train',
+                                                           epoch, global_step)
             # test (using the best training threshold)
             test_threshold = torch.tensor([train_maxTresh])
-            test_f1, _ = model_evaluation(net, cfg, device, test_threshold, run_type='test', epoch=epoch,
-                                          step=global_step)
+            # TODO: undo
+            test_f1, _ = model_evaluation(net, test_dataset, test_threshold, device, 'test', epoch, global_step)
 
             if test_f1 > best_test_f1:
                 print(f'BEST PERFORMANCE SO FAR! <--------------------', flush=True)
@@ -169,31 +171,20 @@ def train(net, cfg):
                     torch.save(net.state_dict(), model_file)
 
 
-def model_evaluation(net, cfg, device, thresholds, run_type, epoch, step):
-
+def model_evaluation(net, dataset, thresholds, device, run_type, epoch, step):
     thresholds = thresholds.to(device)
     y_true_set = []
     y_pred_set = []
 
     measurer = eval.MultiThresholdMetric(thresholds)
-    if cfg.DATASET.LOAD_INTO_MEMORY:
-        dataset = datasets.OSCDDatasetFast(cfg, run_type, no_augmentation=True)
-    else:
-        dataset = datasets.OSCDDataset(cfg, run_type, no_augmentation=True)
-    dataloader_kwargs = {
-        'batch_size': 1,
-        'num_workers': 0 if cfg.DEBUG else cfg.DATALOADER.NUM_WORKER,
-        'shuffle': cfg.DATALOADER.SHUFFLE,
-        'pin_memory': True,
-    }
-    dataloader = torch_data.DataLoader(dataset, **dataloader_kwargs)
 
     with torch.no_grad():
         net.eval()
-        for step, batch in enumerate(dataloader):
-            t1_img = batch['t1_img'].to(device)
-            t2_img = batch['t2_img'].to(device)
-            y_true = batch['label'].to(device)
+
+        for img_name in dataset.names:
+            t1_img, t2_img, y_true = dataset.get_img(img_name)
+            t1_img, t2_img, y_true = t1_img.to(device), t2_img.to(device), y_true.to(device)
+            t1_img, t2_img = t1_img[None, ], t2_img[None, ]
 
             y_pred = net(t1_img, t2_img)
 
