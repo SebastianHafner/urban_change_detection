@@ -4,22 +4,24 @@ import utils
 import cv2
 import tifffile
 
+BANDS = ['B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08', 'B8A', 'B09', 'B10', 'B11', 'B12']
+
 
 def get_band(file: Path) -> str:
     return file.stem.split('_')[-1]
 
 
+# TODO: refactor this function
 def combine_bands(folder: Path) -> tuple:
 
-    bands = ['B01', 'B02', 'B03', 'B04', 'B05', 'B06', 'B07', 'B08', 'B8A', 'B09', 'B10', 'B11', 'B12']
-    n_bands = len(bands)
+    n_bands = len(BANDS)
 
     # using blue band as reference (10 m) to create img
     blue_file = folder / 'B02.tif'
     blue = tifffile.imread(str(blue_file))
     img = np.ndarray((*blue.shape, n_bands), dtype=np.float32)
 
-    for i, band in enumerate(bands):
+    for i, band in enumerate(BANDS):
         band_file = folder / f'{band}.tif'
         arr = tifffile.imread(str(band_file))
         band_h, band_w = arr.shape
@@ -85,6 +87,27 @@ def add_sentinel1(s1_folder: Path, label_folder: Path, city: str, orbit: int, ne
         np.save(save_file, img)
 
 
+def bands2image(path: Path, out_file: Path):
+    n_bands = len(BANDS)
+
+    files = path.glob('**/*')
+    blue_file = [file for file in files if file.is_file() and file.stem.split('_')[-1] == 'B02'][0]
+    stem = blue_file.stem[:-4]
+    blue, transform, crs = utils.read_tif(blue_file)
+    h, w, _ = blue.shape
+    img = np.ndarray((h, w, n_bands), dtype=np.float32)
+
+    for i, band in enumerate(BANDS):
+        band_file = path / f'{stem}_{band}.tif'
+        arr = tifffile.imread(str(band_file))
+        arr = np.clip(arr / 10000, a_min=0, a_max=1)
+
+        # up-sample low res bands
+        arr = cv2.resize(arr, (w, h), interpolation=cv2.INTER_CUBIC)
+        img[:, :, i] = arr
+
+    utils.write_tif(out_file, img, transform, crs)
+
 
 if __name__ == '__main__':
     # assume unchanged OSCD dataset
@@ -124,8 +147,14 @@ if __name__ == '__main__':
         'chongqing': [55, 164]
     }
 
+    # for city in CITIES:
+    #     # process_city(IMG_FOLDER, LABEL_FOLDER, city, NEW_ROOT)
+    #     orbits = ORBITS[city]
+    #     for orbit in orbits:
+    #         add_sentinel1(S1_FOLDER, LABEL_FOLDER, city, orbit, NEW_ROOT)
+
     for city in CITIES:
-        # process_city(IMG_FOLDER, LABEL_FOLDER, city, NEW_ROOT)
-        orbits = ORBITS[city]
-        for orbit in orbits:
-            add_sentinel1(S1_FOLDER, LABEL_FOLDER, city, orbit, NEW_ROOT)
+        for i, img in enumerate(['imgs_1', 'imgs_2']):
+            bands_path = IMG_FOLDER / city / img
+            out_file = IMG_FOLDER.parent / 'sentinel2' / f'sentinel2_{city}_t{i + 1}.tif'
+            bands2image(bands_path, out_file)
