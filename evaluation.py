@@ -322,10 +322,6 @@ def numeric_evaluation(cfg_file: Path, net_file: Path):
         # plt.show()
 
 
-
-
-
-
 def subset_pred_results(pred_results, cities):
     indices = [i for i, city in enumerate(pred_results['city']) if city in cities]
     for key in pred_results.keys():
@@ -338,6 +334,42 @@ def orbit_comparison(cfg_file, net_file):
     pass
 
 
+def standard_deviation(cfg_file: Path, net_file: Path):
+
+    mode = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = torch.device(mode)
+
+    # loading cfg and network
+    cfg = load_cfg(cfg_file)
+    net = load_net(cfg, net_file)
+    net.to(device).eval()
+
+    dataset = datasets.OSCDDataset(cfg, 'test', no_augmentation=True)
+    f1_scores = {}
+    with torch.no_grad():
+        for index in range(len(dataset)):
+            item = dataset.__getitem__(index)
+            t1_img, t2_img = item['t1_img'].to(device), item['t2_img'].to(device)
+            logits = net(t1_img.unsqueeze(0), t2_img.unsqueeze(0))
+            y_pred = torch.sigmoid(logits) > cfg.THRESH
+            y_pred = y_pred.flatten().float()
+            y_true = item['label'].to(device).flatten().float()
+
+            tp = torch.sum(torch.logical_and(y_pred, y_true)).item()
+            fp = torch.sum(torch.logical_and(y_pred, torch.logical_not(y_true))).item()
+            fn = torch.sum(torch.logical_and(torch.logical_not(y_pred), y_true)).item()
+
+            precision = tp / (tp + fp)
+            recall = tp / (tp + fn)
+            f1 = 2 * (precision * recall) / (precision + recall)
+
+            city = item['city']
+            f1_scores[city] = f1
+
+    print(f1_scores)
+    print(np.std(list(f1_scores.values())))
+
+
 if __name__ == '__main__':
 
     CFG_DIR = Path.cwd() / 'configs'
@@ -345,13 +377,14 @@ if __name__ == '__main__':
     STORAGE_DIR = Path('/storage/shafner/urban_change_detection')
 
     dataset = 'OSCD_dataset'
-    cfg = 'fusion_9'
+    cfg = 'fusion_dualstream_7'
 
     cfg_file = CFG_DIR / f'{cfg}.yaml'
     net_file = NET_DIR / cfg / 'final_net.pkl'
 
     # visual_evaluation(STORAGE_DIR, cfg_file, net_file, 'test', 100, label_pred_only=False)
     # visualize_missclassifications(STORAGE_DIR, cfg_file, net_file)
-    visualize_images(STORAGE_DIR)
+    # visualize_images(STORAGE_DIR)
     # numeric_evaluation(cfg_file, net_file)
+    standard_deviation(cfg_file, net_file)
 
